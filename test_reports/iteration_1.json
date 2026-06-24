@@ -1,0 +1,37 @@
+{
+  "summary": "Backend: 14/14 pytest cases passed for Éclosion API (opportunities, training modules, auth protection, groups, funding). Frontend: welcome screen renders correctly with required testIDs and French branding. End-to-end Google Auth flow not automatable - skipped as instructed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "welcome (/)", "issues": ["Hero background image (Unsplash photo-1741940365831...) did not appear to render in web preview during test; only the dark gradient fallback was visible. May be a Unsplash CDN/expo-image web issue. Brand 'ÉCLOSION' is rendered (uppercased via textTransform), title 'Ensemble, bâtissons l'avenir', subtitle, 'Continuer avec Google' CTA, and legal text all present and well-positioned."]}
+    ],
+    "react_native_issues": [
+      {"component": "global", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' - minor RN web deprecation warning, not blocking."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_eclosion_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional) Investigate why the welcome hero image does not load in the web preview; consider preloading or substituting with a Pexels image already used elsewhere.",
+    "(Optional) Replace deprecated shadow* style props with boxShadow to silence RN-web warnings.",
+    "Expo SDK package mismatch warnings in expo logs (expo@54.0.34 vs ~54.0.35, expo-font, expo-router) - not blocking but worth aligning."
+  ],
+  "critical_code_review_comments": [
+    "server.py is a single 500-line file - fine for MVP but consider splitting routers (auth/groups/training/funding) when scope grows.",
+    "All Mongo queries already exclude _id via projection {'_id': 0} - good.",
+    "get_current_user correctly returns 401 for missing/invalid/expired sessions; session TTL index set on expires_at.",
+    "auth/session endpoint relies on the session_token returned by Emergent Auth being stored as the bearer token - matches Emergent playbook pattern.",
+    "No rate limiting on /api/funding/generate which calls Claude via EMERGENT_LLM_KEY - could be abused once auth works; consider per-user throttling later."
+  ],
+  "updated_files": ["/app/backend/tests/test_eclosion_api.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (welcome screen only - auth-gated flows skipped as instructed)"},
+  "seed_data_creation": "None. Used static seed opportunities/training modules from server.py and a single invalid token to exercise 401 path.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend route prefix is /api. Use EXPO_PUBLIC_BACKEND_URL (https://rural-womens-hub.preview.emergentagent.com). Auth uses Emergent Google flow - cannot be automated; to test authenticated endpoints, insert a fake user + user_session document directly into Mongo (collections: users, user_sessions) and call APIs with 'Authorization: Bearer <session_token>'.",
+  "rca_of_issue": "N/A - no failures."
+}
