@@ -1,0 +1,202 @@
+{
+  "app_name": "Éclosion",
+  "personality": "1 iOS-Native Clean with warm earthy botanical accents",
+  "personality_one_liner": "A warm, deeply approachable, and structurally clear space that empowers rural women to learn, collaborate, and grow their businesses.",
+  "color": {
+    "light": {
+      "surface": "#FDFDFB",
+      "onSurface": "#1A1D1A",
+      "surfaceSecondary": "#F2EFEB",
+      "onSurfaceSecondary": "#3A403A",
+      "surfaceTertiary": "#E6E1DC",
+      "onSurfaceTertiary": "#5C665C",
+      "surfaceInverse": "#2B332C",
+      "onSurfaceInverse": "#FDFDFB",
+      "brand": "#4A6B4E",
+      "brandPrimary": "#4A6B4E",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#D98A2C",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#E8F0E8",
+      "onBrandTertiary": "#2E4231",
+      "success": "#3D734B",
+      "onSuccess": "#FFFFFF",
+      "warning": "#C27A27",
+      "onWarning": "#FFFFFF",
+      "error": "#B34D40",
+      "onError": "#FFFFFF",
+      "info": "#4A5D6B",
+      "onInfo": "#FFFFFF",
+      "border": "#E6E1DC",
+      "borderStrong": "#CCC6C0",
+      "divider": "#E6E1DC"
+    },
+    "dark": {
+      "surface": "#161816",
+      "onSurface": "#FDFDFB",
+      "surfaceSecondary": "#242624",
+      "onSurfaceSecondary": "#E6E1DC",
+      "surfaceTertiary": "#2F332F",
+      "onSurfaceTertiary": "#CCC6C0",
+      "surfaceInverse": "#FDFDFB",
+      "onSurfaceInverse": "#161816",
+      "brand": "#668C6A",
+      "brandPrimary": "#668C6A",
+      "onBrandPrimary": "#000000",
+      "brandSecondary": "#E6A85C",
+      "onBrandSecondary": "#000000",
+      "brandTertiary": "#2D3A2F",
+      "onBrandTertiary": "#A8C7AB",
+      "success": "#5C996B",
+      "onSuccess": "#000000",
+      "warning": "#E6A85C",
+      "onWarning": "#000000",
+      "error": "#D96B5B",
+      "onError": "#000000",
+      "info": "#6B8599",
+      "onInfo": "#000000",
+      "border": "#2F332F",
+      "borderStrong": "#4A524A",
+      "divider": "#2F332F"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing. Use large tap targets (min 44pt). Use md/lg for internal card padding, xl for screen edges to avoid cramped layouts.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use frosted glass on the bottom tab bar when content scrolls behind it.",
+      "Use frosted glass on sticky headers in scrollable feeds.",
+      "Apply glass overlay on featured hero cards over imagery to create depth."
+    ],
+    "dont's": [
+      "Do not use glassmorphism on basic list items or form inputs.",
+      "Do not use glass if it degrades readability on low-end Android (fallback to solid surfaceSecondary)."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth (Welcome)",
+      "purpose": "A welcoming entry point emphasizing community and simple Google Auth onboarding.",
+      "states": {
+        "loading": "Centered spinner over the background image.",
+        "empty": "N/A",
+        "error": "Error toast with a retry button for Google Auth failure."
+      },
+      "layout": "Full-screen hero image covering the entire screen (edges). Apply a vertical gradient scrim (transparent to 80% surfaceInverse at the bottom). In the bottom 40%, display a large, welcoming French title ('Ensemble, bâtissons l\\'avenir') and subtitle. Place a sticky, full-width Google Auth CTA button at the very bottom, respecting the safe area."
+    },
+    {
+      "name": "Accueil (Opportunities)",
+      "purpose": "Discover local business opportunities and active community groups.",
+      "states": {
+        "loading": "Skeleton cards representing the feed.",
+        "empty": "A minimalist plant illustration with text 'Aucune opportunité pour le moment.'",
+        "error": "Message 'Impossible de charger les opportunités' with a 'Réessayer' button."
+      },
+      "layout": "Single-column scrollable feed. Top section features a prominent Hero Card for the 'Featured Opportunity' (image background + glassmorphism + text). Below it, a list of smaller opportunity cards (surfaceSecondary background, left-aligned text, right-aligned image thumbnail). A sticky FAB in the bottom right for 'Créer un groupe'."
+    },
+    {
+      "name": "Formations",
+      "purpose": "Library of static training modules on creating and managing small rural businesses.",
+      "states": {
+        "loading": "Grid of skeleton items.",
+        "empty": "Illustration with 'Les formations arrivent bientôt.'",
+        "error": "Message 'Erreur de chargement' with 'Réessayer'."
+      },
+      "layout": "2-column grid layout for module cards (`flexWrap: 'wrap'`, `justifyContent: 'space-between'`). Each card uses `surfaceSecondary`, contains a `brandTertiary` icon container with a Phosphor icon (e.g., book, plant, money), a bold title, and a small progress bar showing completion."
+    },
+    {
+      "name": "Financement",
+      "purpose": "Step-by-step funding request flow leveraging AI to generate a business plan/pitch.",
+      "states": {
+        "loading": "Full screen centered spinner with text 'L\\'IA rédige votre plan d\\'affaires...'",
+        "empty": "N/A",
+        "error": "Message 'La génération a échoué' with a retry button."
+      },
+      "layout": "Wizard/Form flow. Single column with large inputs. One major question per screen to avoid cognitive overload. Labels sit above inputs. Primary CTA ('Suivant' / 'Générer') is sticky at the bottom inside a KeyboardAvoidingView. The final screen presents the generated AI pitch in a beautifully formatted text card with 'Exporter' and 'Envoyer' actions."
+    },
+    {
+      "name": "Mon Groupe",
+      "purpose": "Dashboard showing group members, shared projects, and collaborative progress.",
+      "states": {
+        "loading": "Skeletons for profile header and members list.",
+        "empty": "Illustration indicating 'Vous n\\'êtes dans aucun groupe. Rejoignez-en un!'",
+        "error": "Message 'Erreur de chargement' with 'Réessayer'."
+      },
+      "layout": "Top cover banner (image or brand gradient). Overlapping circular group avatar. Section 1: 'Membres' (horizontal scroll of initials/avatars). Section 2: 'Notre Projet' details in a large `surfaceSecondary` card. Section 3: Recent activity or saved funding requests."
+    }
+  ],
+  "images": {
+    "auth_hero": {
+      "url": "https://images.unsplash.com/photo-1741940365831-1a1fdc2e33ff?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwxfHxhZnJpY2FuJTIwcnVyYWwlMjB3b21lbiUyMGZhcm1pbmclMjBidXNpbmVzc3xlbnwwfHx8fDE3ODIzMDk3NTF8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "African rural women working together"
+    },
+    "opportunity_agriculture": {
+      "url": "https://images.pexels.com/photos/31537320/pexels-photo-31537320.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Women harvesting in rural agriculture"
+    },
+    "opportunity_market": {
+      "url": "https://images.pexels.com/photos/36827828/pexels-photo-36827828.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Bustling African street market"
+    },
+    "empty_state_illustration": {
+      "url": "https://images.pexels.com/photos/33928802/pexels-photo-33928802.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Minimalist plant illustration"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly use French for all copy across the app. No hardcoded English text (e.g., use 'Accueil', 'Formations', 'Financement', 'Mon Groupe').",
+    "Adhere closely to the WCAG AAA contrast ratios. Ensure that text laid over images (like in the Auth hero screen or Opportunity cards) utilizes the mandatory gradient-to-dark scrim pattern (Layer 1: expo-linear-gradient vertical scrim transparent -> 80% surfaceInverse).",
+    "Since the target users are rural with potential tech literacy gaps, keep touch targets large (minimum 44x44pt). Avoid complex gestures; stick to obvious buttons and simple scrolling.",
+    "In the 'Financement' step-by-step AI wizard flow, use one question per screen. Keep the primary CTA sticky at the bottom to maintain a smooth, accessible UX.",
+    "Utilize 'Plus Jakarta Sans' at font weight 400 and 500 exclusively. Do not use heavier weights. Rely on size for typographic hierarchy.",
+    "For avatars or branded entities, use initials inside a brandTertiary circle when actual photos aren't provided. Never use generic user icons.",
+    "Never use Indigo, Violet, Purple, or Blue shades. Stick strictly to the warm earthy sage, off-white, and ochre palette provided in the color object."
+  ],
+  "haptics": {
+    "primary_button_press": "impactLight",
+    "tab_change": "selection",
+    "form_step_complete": "notificationSuccess",
+    "ai_generation_complete": "notificationSuccess"
+  }
+}
