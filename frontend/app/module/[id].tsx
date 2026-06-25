@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
 import { colors, spacing, radius, font } from '@/src/theme';
+import { saveModule, getModule, removeModule } from '@/src/offline';
 
 type Section = { title: string; content: string };
 type ModuleDetail = {
@@ -19,6 +21,7 @@ type ModuleDetail = {
   title: string;
   summary: string;
   duration: string;
+  icon: string;
   sections: Section[];
 };
 
@@ -27,13 +30,56 @@ export default function ModuleDetail() {
   const router = useRouter();
   const [data, setData] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
 
-  useEffect(() => {
-    apiFetch(`/training/modules/${id}`)
-      .then(setData)
-      .catch((e) => console.warn(e))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    // Try cache first
+    const cached = await getModule(id);
+    if (cached) {
+      setData(cached);
+      setOffline(true);
+      setFromCache(true);
+      setLoading(false);
+    }
+    // Then try network to refresh
+    try {
+      const fresh = await apiFetch(`/training/modules/${id}`);
+      setData(fresh);
+      setFromCache(false);
+      // if cached, keep in sync silently
+      if (cached) {
+        await saveModule(fresh);
+      }
+    } catch (e) {
+      if (!cached) console.warn(e);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDownload = async () => {
+    if (!data) return;
+    setBusy(true);
+    try {
+      if (offline) {
+        await removeModule(data.module_id);
+        setOffline(false);
+        Haptics.selectionAsync().catch(() => {});
+      } else {
+        await saveModule(data);
+        setOffline(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="module-detail">
@@ -42,12 +88,41 @@ export default function ModuleDetail() {
           <Feather name="arrow-left" size={20} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.topbarTitle}>Formation</Text>
-        <View style={styles.iconBtn} />
+        {data ? (
+          <Pressable
+            testID="download-toggle"
+            onPress={handleDownload}
+            disabled={busy}
+            style={styles.iconBtn}
+          >
+            {busy ? (
+              <ActivityIndicator size="small" color={colors.brandPrimary} />
+            ) : (
+              <Feather
+                name={offline ? 'check-circle' : 'download'}
+                size={20}
+                color={offline ? colors.success : colors.brandPrimary}
+              />
+            )}
+          </Pressable>
+        ) : <View style={styles.iconBtn} />}
       </View>
-      {loading || !data ? (
+      {loading && !data ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View>
+      ) : !data ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>Module indisponible hors ligne.</Text>
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 60 }}>
+          {offline && (
+            <View style={styles.offlineBadge} testID="offline-badge">
+              <Feather name="download-cloud" size={14} color={colors.success} />
+              <Text style={styles.offlineText}>
+                Disponible hors ligne{fromCache ? ' (mode hors connexion)' : ''}
+              </Text>
+            </View>
+          )}
           <Text style={styles.title}>{data.title}</Text>
           <View style={styles.metaRow}>
             <Feather name="clock" size={13} color={colors.onSurfaceTertiary} />
@@ -63,6 +138,21 @@ export default function ModuleDetail() {
               <Text style={styles.sectionContent}>{s.content}</Text>
             </View>
           ))}
+          <Pressable
+            testID="download-button"
+            style={[styles.downloadBtn, offline && { backgroundColor: colors.surfaceSecondary }]}
+            onPress={handleDownload}
+            disabled={busy}
+          >
+            <Feather
+              name={offline ? 'trash-2' : 'download'}
+              size={18}
+              color={offline ? colors.error : colors.onBrandPrimary}
+            />
+            <Text style={[styles.downloadText, offline && { color: colors.error }]}>
+              {offline ? 'Retirer du téléchargement' : 'Télécharger pour hors ligne'}
+            </Text>
+          </Pressable>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -71,13 +161,24 @@ export default function ModuleDetail() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  errorText: { color: colors.onSurfaceTertiary, fontSize: font.base, textAlign: 'center' },
   topbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
   },
   iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   topbarTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500' },
+  offlineBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#E8F5EB',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  offlineText: { color: colors.success, fontSize: font.sm, fontWeight: '500' },
   title: { color: colors.onSurface, fontSize: font.xxl, fontWeight: '500', marginBottom: spacing.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md },
   duration: { color: colors.onSurfaceTertiary, fontSize: font.sm },
@@ -97,4 +198,16 @@ const styles = StyleSheet.create({
   numText: { color: colors.onBrandPrimary, fontSize: font.base, fontWeight: '500' },
   sectionTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: spacing.sm },
   sectionContent: { color: colors.onSurfaceSecondary, fontSize: font.base, lineHeight: 22 },
+  downloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.brandPrimary,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.pill,
+    marginTop: spacing.lg,
+    minHeight: 56,
+  },
+  downloadText: { color: colors.onBrandPrimary, fontSize: font.lg, fontWeight: '500' },
 });
