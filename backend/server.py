@@ -299,6 +299,32 @@ SEED_DONORS = [
     {"donor_id": "d_cg_04", "name": "Forum des Femmes Africaines (FAWE Congo)", "type": "ONG locale", "country": "Congo",
      "sectors": ["Artisanat", "Agriculture"], "description": "Subventions et mentorat pour entreprises féminines rurales.",
      "phone": "+242 05 555 55 55", "website": "https://fawe.org", "city": "Pointe-Noire"},
+    # Tchad
+    {"donor_id": "d_td_01", "name": "ONU Femmes Tchad", "type": "ONG internationale", "country": "Tchad",
+     "sectors": ["Tous"], "description": "Programmes d'autonomisation économique et appui aux groupements féminins.",
+     "phone": "+235 22 51 80 64", "website": "https://africa.unwomen.org", "city": "N'Djamena"},
+    {"donor_id": "d_td_02", "name": "PARSAT (Projet d'Appui à la Résilience et Sécurité Alimentaire)", "type": "Programme gouvernemental", "country": "Tchad",
+     "sectors": ["Agriculture", "Élevage"], "description": "Subventions matériel et formation pour coopératives rurales (cofinancement FIDA).",
+     "phone": "+235 22 52 31 47", "website": "https://www.ifad.org/fr/web/operations/-/project/2000001255", "city": "N'Djamena"},
+    {"donor_id": "d_td_03", "name": "URCOOPEC Tchad", "type": "Microfinance", "country": "Tchad",
+     "sectors": ["Tous"], "description": "Réseau d'unions de coopératives d'épargne et de crédit pour zones rurales.",
+     "phone": "+235 22 52 88 11", "website": "https://urcoopec.org", "city": "N'Djamena"},
+    {"donor_id": "d_td_04", "name": "PNUD Tchad - Programme MPME", "type": "ONG internationale", "country": "Tchad",
+     "sectors": ["Artisanat", "Agriculture"], "description": "Subventions pour micro et petites entreprises portées par les femmes.",
+     "phone": "+235 22 52 27 56", "website": "https://www.undp.org/fr/chad", "city": "N'Djamena"},
+    # Guinée Équatoriale
+    {"donor_id": "d_gq_01", "name": "FOGAPYME (Fonds de Garantie PME)", "type": "Programme gouvernemental", "country": "Guinée Équatoriale",
+     "sectors": ["Tous"], "description": "Garantie de crédit pour PME locales, accès facilité pour groupes structurés.",
+     "phone": "+240 333 09 25 25", "website": "https://www.guineaecuatorialpress.com", "city": "Malabo"},
+    {"donor_id": "d_gq_02", "name": "PNUD Guinée Équatoriale", "type": "ONG internationale", "country": "Guinée Équatoriale",
+     "sectors": ["Tous"], "description": "Appui aux initiatives communautaires et autonomisation des femmes rurales.",
+     "phone": "+240 333 09 28 87", "website": "https://www.undp.org/fr/equatorial-guinea", "city": "Malabo"},
+    {"donor_id": "d_gq_03", "name": "CCEI Bank GE - Programme TPE", "type": "Banque publique", "country": "Guinée Équatoriale",
+     "sectors": ["Artisanat", "Agriculture"], "description": "Microcrédits adaptés aux très petites entreprises et coopératives villageoises.",
+     "phone": "+240 333 09 33 99", "website": "https://www.cceibankge.com", "city": "Bata"},
+    {"donor_id": "d_gq_04", "name": "Caritas Guinée Équatoriale", "type": "ONG locale", "country": "Guinée Équatoriale",
+     "sectors": ["Agriculture", "Artisanat"], "description": "Subventions et accompagnement de projets communautaires en milieu rural.",
+     "phone": "+240 222 00 00 00", "website": "https://caritas.org", "city": "Malabo"},
 ]
 
 @api_router.get("/donors")
