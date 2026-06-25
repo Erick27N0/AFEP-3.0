@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
 import { colors, spacing, radius, font } from '@/src/theme';
@@ -116,6 +117,14 @@ export default function Financement() {
             <Feather name="plus" size={18} color={colors.onBrandPrimary} />
             <Text style={styles.primaryBtnText}>Nouveau projet</Text>
           </Pressable>
+          <Pressable
+            style={[styles.primaryBtn, { backgroundColor: colors.surfaceSecondary, marginTop: spacing.md }]}
+            onPress={() => router.push('/donors')}
+            testID="see-donors-after"
+          >
+            <Feather name="users" size={18} color={colors.brandPrimary} />
+            <Text style={[styles.primaryBtnText, { color: colors.brandPrimary }]}>Envoyer à un bailleur</Text>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     );
@@ -152,6 +161,25 @@ export default function Financement() {
             style={[styles.input, current.multiline && { minHeight: 140, textAlignVertical: 'top' }]}
           />
           {error && <Text style={styles.error}>{error}</Text>}
+
+          {step === 0 && (
+            <Pressable
+              testID="open-donors"
+              onPress={() => router.push('/donors')}
+              style={styles.donorBanner}
+            >
+              <View style={styles.donorIcon}>
+                <Feather name="users" size={20} color={colors.onBrandSecondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.donorBannerTitle}>Annuaire des bailleurs</Text>
+                <Text style={styles.donorBannerSub}>
+                  ONG, microfinances et programmes pour 5 pays
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.onSurfaceTertiary} />
+            </Pressable>
+          )}
 
           {history.length > 0 && step === 0 && (
             <View style={{ marginTop: spacing.xl }}>
@@ -275,4 +303,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   historyName: { flex: 1, color: colors.onSurface, fontSize: font.base },
+  donorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xl,
+    backgroundColor: colors.surfaceSecondary,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  donorIcon: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.brandSecondary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  donorBannerTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500' },
+  donorBannerSub: { color: colors.onSurfaceTertiary, fontSize: font.sm, marginTop: 2 },
 });
