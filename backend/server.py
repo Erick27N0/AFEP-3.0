@@ -329,9 +329,18 @@ SEED_DONORS = [
 
 @api_router.get("/donors")
 async def list_donors(country: str | None = None):
-    if country and country != "Tous":
-        return [d for d in SEED_DONORS if d["country"] == country]
-    return SEED_DONORS
+    base = SEED_DONORS if not country or country == "Tous" else [d for d in SEED_DONORS if d["country"] == country]
+    # enrich with ratings aggregate
+    out = []
+    for d in base:
+        agg = await db.donor_ratings.aggregate([
+            {"$match": {"donor_id": d["donor_id"]}},
+            {"$group": {"_id": None, "avg": {"$avg": "$stars"}, "count": {"$sum": 1}}}
+        ]).to_list(1)
+        avg = round(agg[0]["avg"], 1) if agg else 0.0
+        count = agg[0]["count"] if agg else 0
+        out.append({**d, "avg_rating": avg, "rating_count": count})
+    return out
 
 @api_router.get("/donors/countries")
 async def donor_countries():
@@ -340,6 +349,53 @@ async def donor_countries():
         if d["country"] not in seen:
             seen.append(d["country"])
     return ["Tous"] + seen
+
+
+class RatingCreate(BaseModel):
+    stars: int
+    outcome: str  # 'no_response' | 'responded' | 'funded' | 'rejected'
+    comment: str = ""
+
+@api_router.post("/donors/{donor_id}/rate")
+async def rate_donor(donor_id: str, payload: RatingCreate, request: Request):
+    user = await get_current_user(request)
+    if not any(d["donor_id"] == donor_id for d in SEED_DONORS):
+        raise HTTPException(status_code=404, detail="Bailleur introuvable")
+    if payload.stars < 1 or payload.stars > 5:
+        raise HTTPException(status_code=400, detail="stars must be 1..5")
+    if payload.outcome not in ("no_response", "responded", "funded", "rejected"):
+        raise HTTPException(status_code=400, detail="invalid outcome")
+    doc = {
+        "donor_id": donor_id,
+        "user_id": user["user_id"],
+        "user_name": user.get("name", ""),
+        "stars": payload.stars,
+        "outcome": payload.outcome,
+        "comment": payload.comment[:500],
+        "created_at": datetime.now(timezone.utc),
+    }
+    # upsert per user per donor
+    await db.donor_ratings.update_one(
+        {"donor_id": donor_id, "user_id": user["user_id"]},
+        {"$set": doc},
+        upsert=True,
+    )
+    return {"ok": True}
+
+@api_router.get("/donors/{donor_id}/reviews")
+async def list_reviews(donor_id: str):
+    if not any(d["donor_id"] == donor_id for d in SEED_DONORS):
+        raise HTTPException(status_code=404, detail="Bailleur introuvable")
+    reviews = await db.donor_ratings.find(
+        {"donor_id": donor_id}, {"_id": 0, "user_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    agg = await db.donor_ratings.aggregate([
+        {"$match": {"donor_id": donor_id}},
+        {"$group": {"_id": None, "avg": {"$avg": "$stars"}, "count": {"$sum": 1}}}
+    ]).to_list(1)
+    avg = round(agg[0]["avg"], 1) if agg else 0.0
+    count = agg[0]["count"] if agg else 0
+    return {"reviews": reviews, "avg": avg, "count": count}
 
 # ---------------- Training Modules (static) ----------------
 TRAINING_MODULES = [

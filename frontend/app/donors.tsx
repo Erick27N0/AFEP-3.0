@@ -24,6 +24,8 @@ type Donor = {
   phone: string;
   website: string;
   city: string;
+  avg_rating: number;
+  rating_count: number;
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -129,6 +131,21 @@ export default function Donors() {
               </View>
 
               <Text style={styles.donorName}>{d.name}</Text>
+              {d.rating_count > 0 && (
+                <View style={styles.ratingRow} testID={`rating-${d.donor_id}`}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Feather
+                      key={s}
+                      name="star"
+                      size={12}
+                      color={s <= Math.round(d.avg_rating) ? colors.brandSecondary : colors.surfaceTertiary}
+                    />
+                  ))}
+                  <Text style={styles.ratingText}>
+                    {d.avg_rating.toFixed(1)} · {d.rating_count} avis
+                  </Text>
+                </View>
+              )}
               <Text style={styles.donorDesc}>{d.description}</Text>
 
               <View style={styles.sectorsRow}>
@@ -155,6 +172,14 @@ export default function Donors() {
                 >
                   <Feather name="external-link" size={15} color={colors.brandPrimary} />
                   <Text style={styles.actionSecondaryText}>Site web</Text>
+                </Pressable>
+                <Pressable
+                  testID={`rate-${d.donor_id}`}
+                  style={[styles.actionBtn, styles.actionSecondary]}
+                  onPress={() => router.push(`/donor-rate/${d.donor_id}?name=${encodeURIComponent(d.name)}`)}
+                >
+                  <Feather name="star" size={15} color={colors.brandSecondary} />
+                  <Text style={[styles.actionSecondaryText, { color: colors.brandSecondary }]}>Noter</Text>
                 </Pressable>
               </View>
             </View>
@@ -218,6 +243,13 @@ const styles = StyleSheet.create({
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   locText: { color: colors.onSurfaceTertiary, fontSize: font.sm },
   donorName: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: 4 },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: spacing.sm,
+  },
+  ratingText: { color: colors.onSurfaceTertiary, fontSize: font.sm, marginLeft: 4 },
   donorDesc: { color: colors.onSurfaceSecondary, fontSize: font.base, lineHeight: 20, marginBottom: spacing.md },
   sectorsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.md },
   sectorChip: {
