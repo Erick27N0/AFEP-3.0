@@ -1,0 +1,56 @@
+{
+  "summary": "Tested the two fixes (+not-found and /auth callback) and regression flows. +not-found works perfectly. /auth route exists (no more 'unmatched route') and the invalid-session-id branch redirects to / correctly. However TWO bugs found: (1) Direct navigation to /auth with NO session_id throws 'Attempted to navigate before mounting the Root Layout component' and stays on /auth (does not redirect to /). (2) Welcome screen no longer shows demo-login-button, which blocks the entire authenticated regression suite (cannot reach tabs, donors, formations module, donor rate). Root cause for #2: EXPO_PUBLIC_DEMO_MODE is missing from frontend/.env, so demoMode initial state is false, and auth-context only ANDs it with backend value (setDemoMode(prev => prev && c.demo_mode)) — it can never become true. Backend /api/config correctly returns {demo_mode: true}. Auth-gated regression tests (Demo login, tabs nav, donors banner, Noter, module-detail) could NOT be executed because of bug #2.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "WelcomeScreen / auth-context",
+        "issue": "demo-login-button never renders on welcome screen. EXPO_PUBLIC_DEMO_MODE is missing from /app/frontend/.env, so initial demoMode=false. In /app/frontend/src/auth-context.tsx line 58, `setDemoMode((prev) => prev && c.demo_mode)` only ANDs, so it can never flip to true even though backend /api/config returns {\"demo_mode\": true}. Fix: either replace with `setDemoMode(!!c.demo_mode)` (use backend as source of truth) OR add EXPO_PUBLIC_DEMO_MODE=true to frontend/.env.",
+        "testID": "demo-login-button",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "AuthCallback (/app/frontend/app/auth.tsx)",
+        "issue": "Visiting /auth directly with no session_id crashes with pageerror 'Attempted to navigate before mounting the Root Layout component. Ensure the Root Layout component is rendering a Slot, or other navigator on the first render.' The user stays on /auth (no redirect to /). Root cause: useEffect synchronously calls router.replace('/') on first paint before the Root Layout/Stack has mounted its navigator. The invalid-session-id path works because the fetch is async, giving the layout time to mount before the catch->replace fires. Fix: defer the navigation with a microtask, e.g. `requestAnimationFrame(() => router.replace('/'))` or `setTimeout(..., 0)`, or guard with a useState mounted flag, or render a <Redirect href='/' /> when !sid instead of imperatively calling router.replace.",
+        "testID": "auth-callback",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Demo login -> tabs -> donors / module / rate (entire authenticated regression)",
+        "issue": "Could not execute. Blocked by missing demo-login-button (see ui_bugs[0]). Once demoMode is fixed these flows should be re-verified.",
+        "affected_testIDs": ["demo-login-button", "tab-accueil", "tab-formations", "tab-financement", "tab-groupe", "open-donors", "donors-screen", "rate-*", "rate-screen", "module-detail"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "global", "issue": "Console warnings persist: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' and 'props.pointerEvents is deprecated. Use style.pointerEvents.' Non-blocking but should eventually be cleaned up."},
+      {"component": "expo Animated", "issue": "Warning 'Animated: useNativeDriver is not supported because the native animated module is missing.' on web preview — expected on web, just noise."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json", "/app/test_reports/iteration_1.json"],
+  "action_items": [
+    "FIX (critical): In /app/frontend/src/auth-context.tsx line ~58, change `setDemoMode((prev) => prev && c.demo_mode)` to `setDemoMode(Boolean(c.demo_mode))` so the backend's /api/config response is the source of truth. (Alternative: add `EXPO_PUBLIC_DEMO_MODE=true` to /app/frontend/.env.) Without this, demo-login-button is never rendered and the demo flow is unreachable.",
+    "FIX (high): In /app/frontend/app/auth.tsx, the `if (!sid) { router.replace('/'); return; }` branch crashes when /auth is loaded directly because it runs before the navigator is mounted. Replace the synchronous router.replace with either: (a) `return <Redirect href='/' />` declaratively when !params.session_id, or (b) wrap with `requestAnimationFrame(() => router.replace('/'))` / `setTimeout(..., 0)`.",
+    "RETEST after both fixes: Demo login -> tab-accueil visible -> tab-formations -> tap a module card -> module-detail; tab-financement -> open-donors -> donors-screen -> tap rate-<id> -> rate-screen; verify tab-groupe also loads without not-found."
+  ],
+  "critical_code_review_comments": [
+    "auth-context.tsx: demoMode init relies on EXPO_PUBLIC_DEMO_MODE which is not present in frontend/.env; combined with the AND-only validation it is effectively dead-coded to false. Use backend response directly.",
+    "auth.tsx: imperative router.replace inside the first useEffect tick is fragile on direct deep-link navigation. Prefer <Redirect> for the no-sid case.",
+    "auth.tsx + auth-context.tsx: processSessionId logic is duplicated between AuthProvider.useEffect (web hash/query capture) and AuthCallback. Consider consolidating into one helper to avoid drift."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested this iteration",
+    "frontend": "+not-found 100% PASS; /auth route exists but only invalid-session path redirects (1/2 PASS); welcome screen partial (welcome-screen + google-login-button PASS, demo-login-button MISSING); auth-gated regression (demo login, tabs, donors, module, rate) 0% BLOCKED by demo button bug"
+  },
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Public URL: https://rural-womens-hub.preview.emergentagent.com. After main agent applies the two fixes, re-run the playwright script that (1) GETs /this-does-not-exist and checks testID 'not-found-screen' + clicks 'go-home', (2) GETs /auth (expects redirect to welcome), (3) GETs /auth?session_id=bogus (expects redirect to welcome), (4) on /, taps testID 'demo-login-button', waits for 'tab-accueil', (5) iterates tabs tab-formations/tab-financement/tab-groupe/tab-accueil, (6) on financement taps 'open-donors' -> donors-screen, taps first rate-<id> -> 'rate-screen', (7) on formations taps a module card -> 'module-detail'. Backend /api/config returns {demo_mode:true} so no backend change needed.",
+  "rca_of_issue": "Bug A (demo-login-button missing): demoMode initial state in auth-context.tsx is derived from process.env.EXPO_PUBLIC_DEMO_MODE which is not defined in frontend/.env, so it resolves to false. The subsequent validation `setDemoMode((prev) => prev && c.demo_mode)` is a boolean AND — once prev is false it stays false regardless of backend value. Bug B (/auth crash): AuthCallback's useEffect calls router.replace('/') synchronously when session_id is missing; expo-router throws because the Root Layout's navigator has not finished mounting on first paint, leaving the user stranded on /auth. The invalid-sid branch succeeds only by accident — the awaited fetch defers the navigation enough for the layout to mount before the catch->replace fires."
+}
