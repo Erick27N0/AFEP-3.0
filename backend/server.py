@@ -362,7 +362,7 @@ SEED_DONORS = [
 ]
 
 @api_router.get("/donors")
-async def list_donors(country: str | None = None):
+async def list_donors(country: Optional[str] = None):
     base = SEED_DONORS if not country or country == "Tous" else [d for d in SEED_DONORS if d["country"] == country]
     # enrich with ratings aggregate
     out = []
