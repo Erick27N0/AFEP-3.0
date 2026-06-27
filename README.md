@@ -57,11 +57,35 @@ Avec `DEMO_MODE=true`, au premier démarrage le backend seede automatiquement :
 ```bash
 cd frontend
 cp .env.example .env
-# Vérifier que EXPO_PUBLIC_BACKEND_URL pointe vers le backend
 yarn install
 yarn start
 # puis 'w' pour web, 'a' pour Android, 'i' pour iOS (ou scanner le QR via Expo Go)
 ```
+
+### Tester sur un téléphone réel (Expo Go)
+
+`localhost` désigne le téléphone lui-même, pas votre ordinateur. Pour que le QR code et les appels API fonctionnent :
+
+1. **Mettre à jour `frontend/.env`** avec l'IP LAN de votre machine de dev (pas `localhost`) :
+   - macOS : `ipconfig getifaddr en0` (ex. `192.168.1.42`)
+   - Linux : `hostname -I | awk '{print $1}'`
+   - Windows : `ipconfig` → IPv4 de votre carte Wi-Fi
+   ```
+   EXPO_PUBLIC_BACKEND_URL=http://192.168.1.42:8001
+   EXPO_PACKAGER_HOSTNAME=192.168.1.42
+   EXPO_PACKAGER_PROXY_URL=http://192.168.1.42:8081
+   ```
+2. **Lancer le backend en bind 0.0.0.0** (déjà fait dans la commande uvicorn ci-dessus) — sinon le téléphone ne pourra pas l'atteindre.
+3. **Téléphone + ordinateur sur le même Wi-Fi**, pare-feu autorisant les ports 8001 et 8081.
+4. **Tunnel alternatif** (si le Wi-Fi du bureau bloque la découverte locale) :
+   ```bash
+   yarn start --tunnel
+   ```
+   Expo génère alors une URL `exp://...exp.direct` accessible depuis n'importe où, mais l'IP du backend dans `EXPO_PUBLIC_BACKEND_URL` doit rester accessible publiquement (utiliser ngrok, Cloudflare Tunnel, ou la preview Emergent).
+
+### Tester via la preview Emergent hébergée
+
+Aucune configuration locale nécessaire : ouvrir l'URL `https://<sous-domaine>.preview.emergentagent.com` sur n'importe quel téléphone. Toutes les variables `EXPO_PUBLIC_*` sont déjà pointées vers le bon backend public.
 
 ## 4. Tester sans Google
 
