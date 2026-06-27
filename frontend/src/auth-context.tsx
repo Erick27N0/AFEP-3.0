@@ -50,12 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (process.env.EXPO_PUBLIC_DEMO_MODE || '').toLowerCase() === 'true'
   );
 
-  // Validate demoMode against backend /api/config
+  // Backend is the source of truth for demo mode (also respects EXPO_PUBLIC_DEMO_MODE)
   useEffect(() => {
     fetch(`${API}/config`)
       .then((r) => (r.ok ? r.json() : null))
       .then((c) => {
-        if (c && typeof c.demo_mode === 'boolean') setDemoMode((prev) => prev && c.demo_mode);
+        if (c && typeof c.demo_mode === 'boolean') setDemoMode(Boolean(c.demo_mode));
       })
       .catch(() => {});
   }, []);

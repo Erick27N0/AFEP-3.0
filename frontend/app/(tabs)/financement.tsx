@@ -32,6 +32,7 @@ type State = Record<string, string>;
 
 export default function Financement() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<State>({});
   const [generating, setGenerating] = useState(false);

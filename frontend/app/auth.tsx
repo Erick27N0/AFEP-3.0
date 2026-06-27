@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/src/auth-context';
 import { useToast } from '@/src/toast';
 import { API, setToken } from '@/src/api';
@@ -16,18 +16,15 @@ export default function AuthCallback() {
   const router = useRouter();
   const { refresh } = useAuth();
   const toast = useToast();
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
+    if (!params.session_id) return;
     const run = async () => {
-      const sid = params.session_id;
-      if (!sid) {
-        router.replace('/');
-        return;
-      }
       try {
         const r = await fetch(
           'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data',
-          { headers: { 'X-Session-ID': String(sid) } }
+          { headers: { 'X-Session-ID': String(params.session_id) } }
         );
         if (!r.ok) throw new Error('session-data failed');
         const data = await r.json();
@@ -43,11 +40,16 @@ export default function AuthCallback() {
         router.replace('/(tabs)');
       } catch {
         toast.show("La connexion Google a échoué. Réessayez.");
-        router.replace('/');
+        setDone(true);
       }
     };
     run();
   }, [params.session_id, router, refresh, toast]);
+
+  // Declarative redirect (safe before layout mount)
+  if (!params.session_id || done) {
+    return <Redirect href="/" />;
+  }
 
   return (
     <View style={styles.center} testID="auth-callback">

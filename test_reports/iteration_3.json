@@ -1,0 +1,54 @@
+{
+  "summary": "Both iteration_2 bugs are FIXED. BUG A (demo-login-button): welcome screen now renders BOTH google-login-button and demo-login-button after the auth-context.tsx switch to setDemoMode(Boolean(c.demo_mode)). BUG B (/auth crash): no more 'Attempted to navigate before mounting' error — declarative <Redirect href='/'/> works; both /auth (no session_id) and /auth?session_id=invalid land on welcome-screen (the invalid case also shows the French error toast). 404 regression (/this-does-not-exist) and go-home button still work. Demo login successfully lands on Accueil with all 4 tabs visible. Formations → module-detail PASS. Donor → rate-screen PASS. NEW BUG FOUND AND FIXED by tester: Financement → open-donors banner threw a red screen 'router is not defined' at app/(tabs)/financement.tsx:168 because useRouter was imported but never invoked inside the component; same defect on line 122 for testID 'see-donors-after'. Added `const router = useRouter();` inside Financement(); after the fix, open-donors -> /donors -> donors-screen works. Also noted: Expo Router's tabBarTestID (tab-accueil/tab-formations/tab-financement/tab-groupe) does NOT propagate as data-testid on web — tabs still navigate (verified via href) but cannot be selected by those testIDs in playwright.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Financement (open-donors / see-donors-after)",
+        "issue": "RED SCREEN: 'Uncaught Error: router is not defined' at app/(tabs)/financement.tsx:168 when tapping the open-donors banner. Root cause: `useRouter` is imported at line 15 but never called inside the Financement() component, so the `router.push('/donors')` handler on lines 122 and 168 references an undefined identifier. Tester applied a fix (added `const router = useRouter();` after `useSafeAreaInsets()`); please confirm the fix is appropriate.",
+        "testID": "open-donors",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Tabs layout (tabBarTestID)",
+        "issue": "tabBarTestID values ('tab-accueil', 'tab-formations', 'tab-financement', 'tab-groupe') declared in app/(tabs)/_layout.tsx are NOT propagated to the rendered tab buttons on web (Expo Router web limitation). Tabs navigate fine via href ('/', '/formations', '/financement', '/groupe') so it is a testability issue rather than a functional bug. Consider wrapping the tab labels with custom tabBarButton or adding accessibilityLabel for stable selectors.",
+        "testID": "tab-accueil",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "global", "issue": "Console warnings persist (non-blocking): '\"shadow*\" style props are deprecated. Use \"boxShadow\".' and 'props.pointerEvents is deprecated. Use style.pointerEvents.'"},
+      {"component": "expo packages out of date", "issue": "Expo doctor warnings: expo@54.0.34 expected ~54.0.35, expo-font@14.0.11 expected ~14.0.12, expo-router@6.0.23 expected ~6.0.24. Reference: /var/log/supervisor/expo.err.log"}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_1.json",
+    "/app/test_reports/iteration_2.json",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "action_items": [
+    "REVIEW (tester applied fix): /app/frontend/app/(tabs)/financement.tsx — added `const router = useRouter();` inside Financement() so the open-donors and see-donors-after Pressables can navigate. Please confirm and keep.",
+    "OPTIONAL: tabBarTestID is not rendered as data-testid on web. If you need stable web selectors for tabs, switch to a custom tabBarButton that forwards testID, or rely on href-based selectors ('a[href=\"/formations\"]' etc.).",
+    "OPTIONAL: bump expo, expo-font, expo-router minor versions as suggested by expo doctor.",
+    "OPTIONAL cleanup: replace deprecated 'shadow*' style props with style.boxShadow and remove props.pointerEvents in favor of style.pointerEvents."
+  ],
+  "critical_code_review_comments": [
+    "financement.tsx: imported useRouter but forgot to call it inside the component — classic copy-paste regression that wasn't caught because no test exercises the banner. Add a smoke test that taps open-donors.",
+    "auth-context.tsx: processSessionId is still duplicated between AuthProvider.useEffect (web hash capture) and AuthCallback in auth.tsx. Consolidate to one helper.",
+    "auth.tsx: now correctly uses <Redirect href='/'/> for the !session_id branch and for the error branch — good."
+  ],
+  "updated_files": [
+    "/app/frontend/app/(tabs)/financement.tsx"
+  ],
+  "success_rate": {
+    "backend": "not retested this iteration (no backend changes since iteration_2)",
+    "frontend": "BUG A 100% PASS; BUG B 100% PASS (both /auth and /auth?session_id=invalid); 404 + go-home 100% PASS; demo login -> Accueil PASS; donors-screen via direct nav PASS; rate-screen PASS; module-detail PASS; open-donors banner PASS after tester fix; tab navigation via href PASS (all 4 routes load, no not-found). tabBarTestID selectors are not present on web (Expo limitation)."
+  },
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Public URL: https://rural-womens-hub.preview.emergentagent.com. Main agent should confirm the financement.tsx fix (added `const router = useRouter();`). If desired, also fix tabBarTestID rendering on web or add href-based selectors for tab tests. All other flows verified working.",
+  "rca_of_issue": "Bug A & Bug B from iteration_2 verified fixed. NEW Bug RCA: app/(tabs)/financement.tsx imported `useRouter` from expo-router but never invoked it inside Financement(), so `router` was undefined at render time. Tapping the open-donors banner (line 168) and the see-donors-after Pressable (line 122) crashed with 'router is not defined'. Reproduction: login via demo, navigate to /financement, tap the 'Annuaire des bailleurs' banner (testID open-donors). Fix applied: added `const router = useRouter();` immediately after `useSafeAreaInsets()` in Financement(). Verified open-donors -> /donors -> donors-screen now renders correctly."
+}
