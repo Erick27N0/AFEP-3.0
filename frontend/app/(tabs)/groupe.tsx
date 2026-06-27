@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons';
 import { apiFetch } from '@/src/api';
 import { useAuth } from '@/src/auth-context';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 
 type Group = {
@@ -30,6 +31,7 @@ type Member = { user_id: string; name: string; picture?: string; email: string }
 export default function MonGroupe() {
   const { user, refresh, logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [allGroups, setAllGroups] = useState<Group[]>([]);
@@ -48,11 +50,11 @@ export default function MonGroupe() {
         setAllGroups(all);
       }
     } catch (e) {
-      console.warn(e);
+      toast.show("Impossible de charger votre groupe.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -65,8 +67,9 @@ export default function MonGroupe() {
       await load();
       setMode('idle');
       setForm({ name: '', description: '', location: '' });
+      toast.show('Groupe créé avec succès', 'success');
     } catch (e) {
-      console.warn(e);
+      toast.show("La création du groupe a échoué. Réessayez.");
     } finally {
       setBusy(false);
     }
@@ -79,8 +82,9 @@ export default function MonGroupe() {
       await refresh();
       await load();
       setMode('idle');
+      toast.show('Vous avez rejoint le groupe', 'success');
     } catch (e) {
-      console.warn(e);
+      toast.show("Impossible de rejoindre ce groupe. Réessayez.");
     } finally {
       setBusy(false);
     }

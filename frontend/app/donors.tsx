@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiFetch } from '@/src/api';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 
 type Donor = {
@@ -39,6 +40,7 @@ const TYPE_COLOR: Record<string, string> = {
 export default function Donors() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const [countries, setCountries] = useState<string[]>(['Tous']);
   const [country, setCountry] = useState('Tous');
   const [donors, setDonors] = useState<Donor[]>([]);
@@ -55,11 +57,11 @@ export default function Donors() {
       const d = await apiFetch(`/donors${q}`);
       setDonors(d);
     } catch (e) {
-      console.warn(e);
+      toast.show("Impossible de charger la liste des bailleurs.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => { load(country); }, [country, load]);
 

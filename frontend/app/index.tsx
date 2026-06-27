@@ -1,23 +1,48 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, Pressable, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/src/auth-context';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 
 const HERO = 'https://images.unsplash.com/photo-1741940365831-1a1fdc2e33ff?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwxfHxhZnJpY2FuJTIwcnVyYWwlMjB3b21lbiUyMGZhcm1pbmclMjBidXNpbmVzc3xlbnwwfHx8fDE3ODIzMDk3NTF8MA&ixlib=rb-4.1.0&q=85';
 
 export default function Index() {
-  const { user, loading, login } = useAuth();
+  const { user, loading, login, loginDemo, demoMode } = useAuth();
   const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState<null | 'google' | 'demo'>(null);
 
   useEffect(() => {
     if (!loading && user) {
       router.replace('/(tabs)');
     }
   }, [user, loading, router]);
+
+  const handleGoogle = async () => {
+    setBusy('google');
+    try {
+      await login();
+    } catch (e: any) {
+      toast.show("La connexion Google a échoué. Vérifiez votre internet et réessayez.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDemo = async () => {
+    setBusy('demo');
+    try {
+      await loginDemo();
+    } catch (e: any) {
+      toast.show("Connexion démo impossible. Le backend doit être lancé avec DEMO_MODE=true.");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -44,12 +69,40 @@ export default function Index() {
         </Text>
         <Pressable
           testID="google-login-button"
-          onPress={login}
-          style={({ pressed }) => [styles.button, pressed && { opacity: 0.85 }]}
+          onPress={handleGoogle}
+          disabled={!!busy}
+          style={({ pressed }) => [styles.button, (pressed || busy === 'google') && { opacity: 0.7 }]}
         >
-          <Feather name="log-in" size={18} color={colors.onBrandPrimary} />
-          <Text style={styles.buttonText}>Continuer avec Google</Text>
+          {busy === 'google' ? (
+            <ActivityIndicator color={colors.onBrandPrimary} />
+          ) : (
+            <>
+              <Feather name="log-in" size={18} color={colors.onBrandPrimary} />
+              <Text style={styles.buttonText}>Continuer avec Google</Text>
+            </>
+          )}
         </Pressable>
+        {demoMode && (
+          <Pressable
+            testID="demo-login-button"
+            onPress={handleDemo}
+            disabled={!!busy}
+            style={({ pressed }) => [
+              styles.button,
+              styles.demoButton,
+              (pressed || busy === 'demo') && { opacity: 0.7 },
+            ]}
+          >
+            {busy === 'demo' ? (
+              <ActivityIndicator color={colors.onBrandPrimary} />
+            ) : (
+              <>
+                <Feather name="zap" size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.buttonText}>Connexion démo (sans Google)</Text>
+              </>
+            )}
+          </Pressable>
+        )}
         <Text style={styles.legal}>
           En continuant, vous acceptez d&apos;utiliser la plateforme à des fins communautaires.
         </Text>
@@ -96,6 +149,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     minHeight: 56,
+  },
+  demoButton: {
+    backgroundColor: 'rgba(217, 138, 44, 0.95)',
   },
   buttonText: {
     color: colors.onBrandPrimary,

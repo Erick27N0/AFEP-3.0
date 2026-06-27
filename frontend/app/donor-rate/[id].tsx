@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 
 type Review = {
@@ -40,6 +41,7 @@ export default function RateDonor() {
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
 
   const [stars, setStars] = useState(0);
   const [outcome, setOutcome] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function RateDonor() {
       const r = await apiFetch(`/donors/${id}/reviews`);
       setData(r);
     } catch (e) {
-      console.warn(e);
+      toast.show("Impossible de charger les avis pour ce bailleur.");
     } finally {
       setLoading(false);
     }
@@ -73,8 +75,9 @@ export default function RateDonor() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setSubmitted(true);
       await load();
+      toast.show("Merci ! Votre avis a bien été publié.", 'success');
     } catch (e) {
-      console.warn(e);
+      toast.show("La publication de votre avis a échoué.");
     } finally {
       setSubmitting(false);
     }

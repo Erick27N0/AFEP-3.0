@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiFetch } from '@/src/api';
 import { useAuth } from '@/src/auth-context';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 
 type Opportunity = {
@@ -34,18 +35,19 @@ export default function Accueil() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     try {
       const data = await apiFetch('/opportunities');
       setItems(data);
     } catch (e) {
-      console.warn(e);
+      toast.show("Impossible de charger les opportunités. Vérifiez votre connexion.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     load();

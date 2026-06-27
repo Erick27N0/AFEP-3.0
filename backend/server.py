@@ -20,6 +20,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() in ('true', '1', 'yes')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -135,6 +136,39 @@ async def logout(request: Request):
         token = auth.split(' ', 1)[1]
         await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
+
+@api_router.get("/config")
+async def app_config():
+    return {"demo_mode": DEMO_MODE}
+
+@api_router.post("/auth/demo-login")
+async def demo_login():
+    """Local-only demo login. Requires DEMO_MODE=true in backend .env."""
+    if not DEMO_MODE:
+        raise HTTPException(status_code=403, detail="Demo mode désactivé")
+    email = "demo@afep.local"
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": email,
+            "name": "Mireille Démo",
+            "picture": "",
+            "group_id": None,
+            "created_at": datetime.now(timezone.utc),
+        })
+    session_token = f"demo_{uuid.uuid4().hex}"
+    await db.user_sessions.insert_one({
+        "session_token": session_token,
+        "user_id": user_id,
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+    })
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return {"session_token": session_token, "user": user}
 
 # ---------------- Groups ----------------
 @api_router.post("/groups")
@@ -599,9 +633,26 @@ Rédige maintenant le document complet en français, prêt à être envoyé à u
     try:
         result = await chat.send_message(UserMessage(text=prompt))
         pitch_text = result if isinstance(result, str) else str(result)
+        ai_generated = True
     except Exception as e:
-        logger.exception("AI generation failed")
-        raise HTTPException(status_code=500, detail=f"Génération échouée: {e}")
+        logger.warning("AI generation failed, using fallback: %s", e)
+        ai_generated = False
+        pitch_text = (
+            f"## Résumé exécutif\n{user.get('name', 'Notre groupe')} sollicite un financement de "
+            f"**{payload.target_amount}** pour le projet **{payload.project_name}** "
+            f"(secteur {payload.sector}).\n\n"
+            f"## Le problème\n{payload.problem}\n\n"
+            f"## Notre solution\n{payload.solution}\n\n"
+            f"## Bénéficiaires & impact\n{payload.beneficiaries}\n\n"
+            f"## Plan d'utilisation des fonds\n"
+            f"- Équipement et matières premières (60 %)\n"
+            f"- Formation et accompagnement (15 %)\n"
+            f"- Frais de fonctionnement (15 %)\n"
+            f"- Imprévus (10 %)\n\n"
+            f"## Pourquoi nous soutenir\nGroupe structuré et ancré dans la communauté, "
+            f"avec un projet rentable et un impact mesurable.\n\n"
+            f"_Note : ce pitch a été généré en mode hors-IA (fallback)._"
+        )
 
     req_id = f"fund_{uuid.uuid4().hex[:10]}"
     record = {
@@ -615,6 +666,7 @@ Rédige maintenant le document complet en français, prêt à être envoyé à u
         "target_amount": payload.target_amount,
         "beneficiaries": payload.beneficiaries,
         "pitch": pitch_text,
+        "ai_generated": ai_generated,
         "status": "draft",
         "created_at": datetime.now(timezone.utc),
     }
@@ -653,7 +705,110 @@ async def startup():
     await db.user_sessions.create_index("user_id")
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     await db.groups.create_index("group_id", unique=True)
+    await db.donor_ratings.create_index([("donor_id", 1), ("user_id", 1)], unique=True)
     logger.info("Indexes ready")
+    if DEMO_MODE:
+        await seed_demo_data()
+
+async def seed_demo_data():
+    """Seed sample groups + funding requests + donor reviews if collections empty."""
+    if await db.groups.count_documents({}) == 0:
+        sample_creator = "user_demo_seed"
+        # ensure a seed user exists for ownership
+        await db.users.update_one(
+            {"user_id": sample_creator},
+            {"$setOnInsert": {
+                "user_id": sample_creator,
+                "email": "seed@afep.local",
+                "name": "Compte démo (semence)",
+                "picture": "",
+                "group_id": None,
+                "created_at": datetime.now(timezone.utc),
+            }},
+            upsert=True,
+        )
+        await db.groups.insert_many([
+            {
+                "group_id": "grp_demo_001",
+                "name": "Coopérative Femmes de Bafia",
+                "description": "12 femmes spécialisées dans la transformation du manioc en farine et tapioca.",
+                "location": "Bafia, Cameroun",
+                "members": [sample_creator],
+                "created_by": sample_creator,
+                "created_at": datetime.now(timezone.utc),
+            },
+            {
+                "group_id": "grp_demo_002",
+                "name": "Association des Artisanes de Pointe-Noire",
+                "description": "Atelier collectif de couture et de teinture de pagnes traditionnels.",
+                "location": "Pointe-Noire, Congo",
+                "members": [sample_creator],
+                "created_by": sample_creator,
+                "created_at": datetime.now(timezone.utc),
+            },
+        ])
+        logger.info("Seeded sample groups")
+    if await db.funding_requests.count_documents({}) == 0:
+        await db.funding_requests.insert_many([
+            {
+                "request_id": "fund_demo_001",
+                "user_id": "user_demo_seed",
+                "group_id": "grp_demo_001",
+                "project_name": "Unité de transformation du manioc",
+                "sector": "Agriculture",
+                "problem": "Le manioc pourrit avant d'arriver au marché.",
+                "solution": "Transformer le manioc en farine localement.",
+                "target_amount": "750 000 FCFA",
+                "beneficiaries": "12 femmes et leurs familles",
+                "pitch": (
+                    "## Résumé exécutif\nLa Coopérative Femmes de Bafia sollicite 750 000 FCFA "
+                    "pour installer une unité de transformation du manioc en farine, au bénéfice "
+                    "de 12 femmes et de leurs familles.\n\n## Le problème\nLe manioc récolté se gâte "
+                    "rapidement faute de marché de proximité.\n\n## Notre solution\nUne presse, "
+                    "un séchoir solaire et des emballages permettront de produire 200 kg de farine "
+                    "par semaine, vendue 500 FCFA/kg.\n\n## Bénéficiaires & impact\n12 femmes, "
+                    "60 personnes directement concernées.\n\n## Plan d'utilisation des fonds\n"
+                    "- Équipement (45 %)\n- Fonds de roulement matières premières (30 %)\n"
+                    "- Formation & emballages (15 %)\n- Imprévus (10 %)\n\n## Pourquoi nous soutenir\n"
+                    "Groupe organisé depuis 3 ans, soutien de la chefferie locale, projet rentable "
+                    "dès le 4e mois."
+                ),
+                "status": "draft",
+                "created_at": datetime.now(timezone.utc),
+            }
+        ])
+        logger.info("Seeded sample funding requests")
+    if await db.donor_ratings.count_documents({}) == 0:
+        await db.donor_ratings.insert_many([
+            {
+                "donor_id": "d_cm_02",
+                "user_id": "user_demo_seed",
+                "user_name": "Aïcha (démo)",
+                "stars": 5,
+                "outcome": "funded",
+                "comment": "Réponse rapide, équipe à l'écoute. Notre projet a été financé après 2 visites.",
+                "created_at": datetime.now(timezone.utc),
+            },
+            {
+                "donor_id": "d_cm_02",
+                "user_id": "user_demo_seed_2",
+                "user_name": "Mireille (démo)",
+                "stars": 4,
+                "outcome": "responded",
+                "comment": "Bon accueil mais il faut bien préparer son dossier.",
+                "created_at": datetime.now(timezone.utc),
+            },
+            {
+                "donor_id": "d_cg_01",
+                "user_id": "user_demo_seed",
+                "user_name": "Aïcha (démo)",
+                "stars": 5,
+                "outcome": "funded",
+                "comment": "MUCODEC accepte vraiment les groupes de femmes, démarches simples.",
+                "created_at": datetime.now(timezone.utc),
+            },
+        ])
+        logger.info("Seeded sample donor ratings")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

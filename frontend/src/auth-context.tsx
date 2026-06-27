@@ -15,7 +15,9 @@ type User = {
 type AuthCtx = {
   user: User | null;
   loading: boolean;
+  demoMode: boolean;
   login: () => Promise<void>;
+  loginDemo: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -44,6 +46,19 @@ async function processSessionId(sessionId: string) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(
+    (process.env.EXPO_PUBLIC_DEMO_MODE || '').toLowerCase() === 'true'
+  );
+
+  // Validate demoMode against backend /api/config
+  useEffect(() => {
+    fetch(`${API}/config`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => {
+        if (c && typeof c.demo_mode === 'boolean') setDemoMode((prev) => prev && c.demo_mode);
+      })
+      .catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -129,8 +144,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const loginDemo = useCallback(async () => {
+    const res = await fetch(`${API}/auth/demo-login`, { method: 'POST' });
+    if (!res.ok) throw new Error('Demo mode désactivé côté serveur');
+    const data = await res.json();
+    await setToken(data.session_token);
+    setUser(data.user);
+  }, []);
+
   return (
-    <Ctx.Provider value={{ user, loading, login, logout, refresh }}>
+    <Ctx.Provider value={{ user, loading, demoMode, login, loginDemo, logout, refresh }}>
       {children}
     </Ctx.Provider>
   );

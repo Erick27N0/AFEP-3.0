@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 import { getIndex, saveModule, getModule } from '@/src/offline';
 
@@ -39,6 +40,7 @@ export default function Formations() {
   const [downloadingAll, setDownloadingAll] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
 
   const loadDownloaded = useCallback(async () => {
     const idx = await getIndex();
@@ -47,11 +49,9 @@ export default function Formations() {
 
   const load = useCallback(async () => {
     try {
-      // Try network for list
       const data = await apiFetch('/training/modules');
       setItems(data);
     } catch {
-      // Offline: reconstruct list from cache
       const idx = await getIndex();
       const cached: Module[] = [];
       for (const mid of idx) {
@@ -65,10 +65,15 @@ export default function Formations() {
         });
       }
       setItems(cached);
+      if (cached.length === 0) {
+        toast.show("Impossible de charger les formations. Aucun module hors ligne.");
+      } else {
+        toast.show(`Mode hors ligne : ${cached.length} module(s) disponibles.`, 'info');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     load();
@@ -87,8 +92,9 @@ export default function Formations() {
       }
       await loadDownloaded();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      toast.show(`${items.length} module(s) téléchargé(s).`, 'success');
     } catch (e) {
-      console.warn(e);
+      toast.show("Téléchargement interrompu. Réessayez avec une meilleure connexion.");
     } finally {
       setDownloadingAll(false);
     }

@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
+import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
 import { saveModule, getModule, removeModule } from '@/src/offline';
 
@@ -28,6 +29,7 @@ type ModuleDetail = {
 export default function ModuleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const toast = useToast();
   const [data, setData] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
@@ -55,11 +57,13 @@ export default function ModuleDetail() {
         await saveModule(fresh);
       }
     } catch (e) {
-      if (!cached) console.warn(e);
+      if (!cached) {
+        toast.show("Impossible de charger ce module. Téléchargez-le pour le consulter hors ligne.");
+      }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, toast]);
 
   useEffect(() => { load(); }, [load]);
 
