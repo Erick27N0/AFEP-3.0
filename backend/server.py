@@ -682,6 +682,76 @@ async def list_my_funding(request: Request):
     ).sort("created_at", -1).to_list(100)
     return items
 
+# ---------------- Admin Dashboard ----------------
+@api_router.get("/admin/summary")
+async def admin_summary(request: Request):
+    await get_current_user(request)
+    donor_countries = sorted({d["country"] for d in SEED_DONORS})
+    donor_types = sorted({d["type"] for d in SEED_DONORS})
+    opportunity_sectors = sorted({o["sector"] for o in SEED_OPPORTUNITIES})
+    training_minutes = sum(
+        int("".join(ch for ch in m["duration"] if ch.isdigit()) or 0)
+        for m in TRAINING_MODULES
+    )
+
+    donor_rating_stats = await db.donor_ratings.aggregate([
+        {
+            "$group": {
+                "_id": None,
+                "avg": {"$avg": "$stars"},
+                "count": {"$sum": 1},
+                "funded": {"$sum": {"$cond": [{"$eq": ["$outcome", "funded"]}, 1, 0]}},
+            }
+        }
+    ]).to_list(1)
+    donor_stats = donor_rating_stats[0] if donor_rating_stats else {"avg": 0, "count": 0, "funded": 0}
+
+    funding_by_sector = await db.funding_requests.aggregate([
+        {"$group": {"_id": "$sector", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1, "_id": 1}},
+    ]).to_list(20)
+
+    recent_groups = await db.groups.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
+    recent_funding = await db.funding_requests.find(
+        {},
+        {
+            "_id": 0,
+            "request_id": 1,
+            "project_name": 1,
+            "sector": 1,
+            "target_amount": 1,
+            "status": 1,
+            "created_at": 1,
+            "ai_generated": 1,
+        },
+    ).sort("created_at", -1).to_list(5)
+
+    return {
+        "counts": {
+            "users": await db.users.count_documents({}),
+            "groups": await db.groups.count_documents({}),
+            "funding_requests": await db.funding_requests.count_documents({}),
+            "donor_reviews": donor_stats["count"],
+            "opportunities": len(SEED_OPPORTUNITIES),
+            "training_modules": len(TRAINING_MODULES),
+            "donors": len(SEED_DONORS),
+        },
+        "catalog": {
+            "donor_countries": donor_countries,
+            "donor_types": donor_types,
+            "opportunity_sectors": opportunity_sectors,
+            "training_minutes": training_minutes,
+        },
+        "donor_ratings": {
+            "average": round(donor_stats["avg"], 1) if donor_stats.get("avg") else 0.0,
+            "count": donor_stats["count"],
+            "funded_count": donor_stats["funded"],
+        },
+        "funding_by_sector": [{"sector": i.get("_id") or "Non précisé", "count": i["count"]} for i in funding_by_sector],
+        "recent_groups": recent_groups,
+        "recent_funding": recent_funding,
+    }
+
 # ---------------- Root ----------------
 @api_router.get("/")
 async def root():

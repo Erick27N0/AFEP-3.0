@@ -41,7 +41,7 @@ export default function Accueil() {
     try {
       const data = await apiFetch('/opportunities');
       setItems(data);
-    } catch (e) {
+    } catch {
       toast.show("Impossible de charger les opportunités. Vérifiez votre connexion.");
     } finally {
       setLoading(false);
@@ -63,6 +63,13 @@ export default function Accueil() {
           <Text style={styles.hello}>Bonjour</Text>
           <Text style={styles.name} numberOfLines={1}>{user?.name?.split(' ')[0] || 'Bienvenue'}</Text>
         </View>
+        <Pressable
+          testID="open-admin"
+          onPress={() => router.push('/admin' as never)}
+          style={styles.adminButton}
+        >
+          <Feather name="bar-chart-2" size={19} color={colors.brandPrimary} />
+        </Pressable>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
             {(user?.name || '?').slice(0, 1).toUpperCase()}
@@ -145,6 +152,14 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: colors.brandTertiary,
     alignItems: 'center', justifyContent: 'center',
+  },
+  adminButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarText: { color: colors.onBrandTertiary, fontSize: font.lg, fontWeight: '500' },
   section: {
