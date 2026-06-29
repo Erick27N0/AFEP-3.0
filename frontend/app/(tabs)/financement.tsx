@@ -32,6 +32,7 @@ type State = Record<string, string>;
 
 export default function Financement() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<State>({});
   const [generating, setGenerating] = useState(false);
@@ -73,7 +74,7 @@ export default function Financement() {
       setPitch(res.pitch);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       loadHistory();
-    } catch (e: any) {
+    } catch {
       setError("La génération a échoué. Veuillez réessayer.");
     } finally {
       setGenerating(false);

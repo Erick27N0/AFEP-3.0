@@ -37,7 +37,7 @@ export default function TabsLayout() {
         options={{
           title: 'Accueil',
           tabBarIcon: ({ color, size }) => <Feather name="home" size={size} color={color} />,
-          tabBarTestID: 'tab-accueil',
+          tabBarButtonTestID: 'tab-accueil',
         }}
       />
       <Tabs.Screen
@@ -45,7 +45,7 @@ export default function TabsLayout() {
         options={{
           title: 'Formations',
           tabBarIcon: ({ color, size }) => <Feather name="book-open" size={size} color={color} />,
-          tabBarTestID: 'tab-formations',
+          tabBarButtonTestID: 'tab-formations',
         }}
       />
       <Tabs.Screen
@@ -53,7 +53,7 @@ export default function TabsLayout() {
         options={{
           title: 'Financement',
           tabBarIcon: ({ color, size }) => <Feather name="trending-up" size={size} color={color} />,
-          tabBarTestID: 'tab-financement',
+          tabBarButtonTestID: 'tab-financement',
         }}
       />
       <Tabs.Screen
@@ -61,7 +61,7 @@ export default function TabsLayout() {
         options={{
           title: 'Mon Groupe',
           tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={color} />,
-          tabBarTestID: 'tab-groupe',
+          tabBarButtonTestID: 'tab-groupe',
         }}
       />
     </Tabs>

@@ -9,15 +9,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
-import { saveModule, getModule, removeModule } from '@/src/offline';
+import { saveModule, getModule, removeModule, getModuleProgress, setModuleCompleted } from '@/src/offline';
 
 type Section = { title: string; content: string };
-type ModuleDetail = {
+type ModuleDetailData = {
   module_id: string;
   title: string;
   summary: string;
@@ -30,17 +30,22 @@ export default function ModuleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
-  const [data, setData] = useState<ModuleDetail | null>(null);
+  const [data, setData] = useState<ModuleDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [fromCache, setFromCache] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     // Try cache first
-    const cached = await getModule(id);
+    const [cached, savedProgress] = await Promise.all([
+      getModule(id),
+      getModuleProgress(id),
+    ]);
+    setCompleted(savedProgress.completed);
     if (cached) {
       setData(cached);
       setOffline(true);
@@ -56,7 +61,7 @@ export default function ModuleDetail() {
       if (cached) {
         await saveModule(fresh);
       }
-    } catch (e) {
+    } catch {
       if (!cached) {
         toast.show("Impossible de charger ce module. Téléchargez-le pour le consulter hors ligne.");
       }
@@ -83,6 +88,15 @@ export default function ModuleDetail() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleCompletion = async () => {
+    if (!data) return;
+    const nextCompleted = !completed;
+    setCompleted(nextCompleted);
+    await setModuleCompleted(data.module_id, nextCompleted);
+    Haptics.selectionAsync().catch(() => {});
+    toast.show(nextCompleted ? 'Module marqué comme terminé.' : 'Module remis à faire.', 'success');
   };
 
   return (
@@ -133,6 +147,22 @@ export default function ModuleDetail() {
             <Text style={styles.duration}>{data.duration}</Text>
           </View>
           <Text style={styles.summary}>{data.summary}</Text>
+          <View style={styles.progressPanel} testID="module-progress">
+            <View style={styles.progressHeader}>
+              <View>
+                <Text style={styles.progressLabel}>Progression</Text>
+                <Text style={styles.progressValue}>{completed ? 'Terminé' : 'À faire'}</Text>
+              </View>
+              <Feather
+                name={completed ? 'check-circle' : 'circle'}
+                size={24}
+                color={completed ? colors.success : colors.onSurfaceTertiary}
+              />
+            </View>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: completed ? '100%' : '0%' }]} />
+            </View>
+          </View>
           {data.sections.map((s, i) => (
             <View key={i} style={styles.section}>
               <View style={styles.numBadge}>
@@ -142,6 +172,20 @@ export default function ModuleDetail() {
               <Text style={styles.sectionContent}>{s.content}</Text>
             </View>
           ))}
+          <Pressable
+            testID="completion-toggle"
+            style={[styles.completeBtn, completed && { backgroundColor: colors.surfaceSecondary }]}
+            onPress={handleCompletion}
+          >
+            <Feather
+              name={completed ? 'rotate-ccw' : 'check-circle'}
+              size={18}
+              color={completed ? colors.brandPrimary : colors.onBrandSecondary}
+            />
+            <Text style={[styles.completeText, completed && { color: colors.brandPrimary }]}>
+              {completed ? 'Remettre à faire' : 'Marquer comme terminé'}
+            </Text>
+          </Pressable>
           <Pressable
             testID="download-button"
             style={[styles.downloadBtn, offline && { backgroundColor: colors.surfaceSecondary }]}
@@ -187,6 +231,31 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md },
   duration: { color: colors.onSurfaceTertiary, fontSize: font.sm },
   summary: { color: colors.onSurfaceSecondary, fontSize: font.lg, lineHeight: 24, marginBottom: spacing.xl },
+  progressPanel: {
+    backgroundColor: colors.brandTertiary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  progressLabel: { color: colors.onSurfaceTertiary, fontSize: font.sm, marginBottom: 2 },
+  progressValue: { color: colors.onBrandTertiary, fontSize: font.lg, fontWeight: '500' },
+  progressTrack: {
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+  },
   section: {
     backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.lg,
@@ -202,6 +271,18 @@ const styles = StyleSheet.create({
   numText: { color: colors.onBrandPrimary, fontSize: font.base, fontWeight: '500' },
   sectionTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: spacing.sm },
   sectionContent: { color: colors.onSurfaceSecondary, fontSize: font.base, lineHeight: 22 },
+  completeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.brandSecondary,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.pill,
+    marginTop: spacing.lg,
+    minHeight: 56,
+  },
+  completeText: { color: colors.onBrandSecondary, fontSize: font.lg, fontWeight: '500' },
   downloadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -210,7 +291,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandPrimary,
     paddingVertical: spacing.lg,
     borderRadius: radius.pill,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     minHeight: 56,
   },
   downloadText: { color: colors.onBrandPrimary, fontSize: font.lg, fontWeight: '500' },
