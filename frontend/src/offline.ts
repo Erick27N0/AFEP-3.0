@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY_PREFIX = 'offline_module_';
 const INDEX_KEY = 'offline_modules_index';
+const PROGRESS_KEY = 'training_progress';
 
 export type OfflineModule = {
   module_id: string;
@@ -12,6 +13,14 @@ export type OfflineModule = {
   sections: { title: string; content: string }[];
   saved_at: number;
 };
+
+export type TrainingProgress = {
+  completed: boolean;
+  completed_at: number | null;
+  updated_at: number;
+};
+
+export type TrainingProgressMap = Record<string, TrainingProgress>;
 
 export async function saveModule(mod: Omit<OfflineModule, 'saved_at'>) {
   const payload: OfflineModule = { ...mod, saved_at: Date.now() };
@@ -38,4 +47,29 @@ export async function removeModule(module_id: string) {
 export async function getIndex(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(INDEX_KEY);
   return raw ? JSON.parse(raw) : [];
+}
+
+export async function getProgress(): Promise<TrainingProgressMap> {
+  const raw = await AsyncStorage.getItem(PROGRESS_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+
+export async function getModuleProgress(module_id: string): Promise<TrainingProgress> {
+  const progress = await getProgress();
+  return progress[module_id] ?? {
+    completed: false,
+    completed_at: null,
+    updated_at: 0,
+  };
+}
+
+export async function setModuleCompleted(module_id: string, completed: boolean) {
+  const progress = await getProgress();
+  progress[module_id] = {
+    completed,
+    completed_at: completed ? Date.now() : null,
+    updated_at: Date.now(),
+  };
+  await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  return progress[module_id];
 }

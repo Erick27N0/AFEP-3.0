@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
-import { getIndex, saveModule, getModule } from '@/src/offline';
+import { getIndex, saveModule, getModule, getProgress, type TrainingProgressMap } from '@/src/offline';
 
 type Module = {
   module_id: string;
@@ -36,6 +36,7 @@ const ICON_MAP: Record<string, keyof typeof Feather.glyphMap> = {
 export default function Formations() {
   const [items, setItems] = useState<Module[]>([]);
   const [downloadedIds, setDownloadedIds] = useState<string[]>([]);
+  const [progress, setProgress] = useState<TrainingProgressMap>({});
   const [loading, setLoading] = useState(true);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const router = useRouter();
@@ -43,8 +44,9 @@ export default function Formations() {
   const toast = useToast();
 
   const loadDownloaded = useCallback(async () => {
-    const idx = await getIndex();
+    const [idx, savedProgress] = await Promise.all([getIndex(), getProgress()]);
     setDownloadedIds(idx);
+    setProgress(savedProgress);
   }, []);
 
   const load = useCallback(async () => {
@@ -93,7 +95,7 @@ export default function Formations() {
       await loadDownloaded();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       toast.show(`${items.length} module(s) téléchargé(s).`, 'success');
-    } catch (e) {
+    } catch {
       toast.show("Téléchargement interrompu. Réessayez avec une meilleure connexion.");
     } finally {
       setDownloadingAll(false);
@@ -101,6 +103,8 @@ export default function Formations() {
   };
 
   const allDownloaded = items.length > 0 && downloadedIds.length >= items.length;
+  const completedCount = items.filter((m) => progress[m.module_id]?.completed).length;
+  const progressPercent = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="formations-screen">
@@ -108,10 +112,15 @@ export default function Formations() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Formations</Text>
           <Text style={styles.subtitle}>
-            {downloadedIds.length > 0
-              ? `${downloadedIds.length} module(s) hors ligne`
+            {items.length > 0
+              ? `${completedCount}/${items.length} terminé(s) · ${downloadedIds.length} hors ligne`
               : 'Apprenez à votre rythme'}
           </Text>
+          {items.length > 0 && (
+            <View style={styles.headerProgressTrack} testID="training-progress">
+              <View style={[styles.headerProgressFill, { width: `${progressPercent}%` }]} />
+            </View>
+          )}
         </View>
         {items.length > 0 && (
           <Pressable
@@ -153,6 +162,7 @@ export default function Formations() {
           <View style={styles.grid}>
             {items.map((m) => {
               const isDownloaded = downloadedIds.includes(m.module_id);
+              const isCompleted = progress[m.module_id]?.completed;
               return (
                 <Pressable
                   key={m.module_id}
@@ -168,9 +178,16 @@ export default function Formations() {
                         color={colors.onBrandTertiary}
                       />
                     </View>
-                    {isDownloaded && (
+                    {isCompleted ? (
                       <View
-                        style={styles.downloadedDot}
+                        style={[styles.statusDot, styles.completedDot]}
+                        testID={`completed-${m.module_id}`}
+                      >
+                        <Feather name="check-circle" size={13} color="#fff" />
+                      </View>
+                    ) : isDownloaded && (
+                      <View
+                        style={[styles.statusDot, styles.downloadedDot]}
                         testID={`downloaded-${m.module_id}`}
                       >
                         <Feather name="check" size={11} color="#fff" />
@@ -182,6 +199,14 @@ export default function Formations() {
                   <View style={styles.duration}>
                     <Feather name="clock" size={11} color={colors.onSurfaceTertiary} />
                     <Text style={styles.durationText}>{m.duration}</Text>
+                  </View>
+                  <View style={styles.cardProgressRow}>
+                    <View style={styles.cardProgressTrack}>
+                      <View style={[styles.cardProgressFill, { width: isCompleted ? '100%' : '0%' }]} />
+                    </View>
+                    <Text style={[styles.progressText, isCompleted && { color: colors.success }]}>
+                      {isCompleted ? 'Terminé' : 'À faire'}
+                    </Text>
                   </View>
                 </Pressable>
               );
@@ -206,6 +231,18 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.onSurface, fontSize: font.xxl, fontWeight: '500' },
   subtitle: { color: colors.onSurfaceTertiary, fontSize: font.base, marginTop: 4 },
+  headerProgressTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceTertiary,
+    marginTop: spacing.md,
+    overflow: 'hidden',
+  },
+  headerProgressFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+  },
   dlAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -237,13 +274,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandTertiary,
     alignItems: 'center', justifyContent: 'center',
   },
-  downloadedDot: {
+  statusDot: {
     width: 22, height: 22, borderRadius: 11,
-    backgroundColor: colors.success,
     alignItems: 'center', justifyContent: 'center',
   },
+  downloadedDot: { backgroundColor: colors.success },
+  completedDot: { backgroundColor: colors.brandSecondary },
   cardTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: 4 },
   cardSummary: { color: colors.onSurfaceSecondary, fontSize: font.sm, lineHeight: 18, flex: 1 },
   duration: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
   durationText: { color: colors.onSurfaceTertiary, fontSize: font.sm },
+  cardProgressRow: { marginTop: spacing.md, gap: 6 },
+  cardProgressTrack: {
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceTertiary,
+    overflow: 'hidden',
+  },
+  cardProgressFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+  },
+  progressText: { color: colors.onSurfaceTertiary, fontSize: font.sm, fontWeight: '500' },
 });
