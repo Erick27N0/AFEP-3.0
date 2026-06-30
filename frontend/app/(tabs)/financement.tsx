@@ -9,12 +9,13 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { apiFetch } from '@/src/api';
+import { API, apiFetch, getToken } from '@/src/api';
 import { colors, spacing, radius, font } from '@/src/theme';
 
 type Step = { key: string; label: string; placeholder: string; multiline?: boolean };
@@ -29,6 +30,11 @@ const STEPS: Step[] = [
 ];
 
 type State = Record<string, string>;
+type FundingRequest = {
+  request_id: string;
+  project_name: string;
+  pitch: string;
+};
 
 export default function Financement() {
   const insets = useSafeAreaInsets();
@@ -37,8 +43,10 @@ export default function Financement() {
   const [data, setData] = useState<State>({});
   const [generating, setGenerating] = useState(false);
   const [pitch, setPitch] = useState<string | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<FundingRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<FundingRequest[]>([]);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const loadHistory = async () => {
     try {
@@ -72,6 +80,7 @@ export default function Financement() {
         body: JSON.stringify(data),
       });
       setPitch(res.pitch);
+      setSelectedRequest(res);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       loadHistory();
     } catch {
@@ -85,7 +94,45 @@ export default function Financement() {
     setStep(0);
     setData({});
     setPitch(null);
+    setSelectedRequest(null);
     setError(null);
+  };
+
+  const exportPdf = async () => {
+    if (!selectedRequest) return;
+    setExportingPdf(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API}/funding/${selectedRequest.request_id}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) throw new Error('PDF export failed');
+      if (Platform.OS === 'web') {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${selectedRequest.request_id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const url = String(reader.result);
+          Linking.openURL(url).catch(() => {
+            setError("Export PDF généré, mais impossible de l'ouvrir sur cet appareil.");
+          });
+        };
+        reader.readAsDataURL(blob);
+      }
+    } catch {
+      setError("L'export PDF a échoué. Réessayez.");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   if (generating) {
@@ -114,6 +161,24 @@ export default function Financement() {
           <View style={styles.pitchCard}>
             <Text style={styles.pitchText}>{pitch}</Text>
           </View>
+          {selectedRequest && (
+            <Pressable
+              style={[styles.primaryBtn, styles.pdfBtn]}
+              onPress={exportPdf}
+              disabled={exportingPdf}
+              testID="export-pdf"
+            >
+              {exportingPdf ? (
+                <ActivityIndicator size="small" color={colors.onBrandSecondary} />
+              ) : (
+                <Feather name="download" size={18} color={colors.onBrandSecondary} />
+              )}
+              <Text style={[styles.primaryBtnText, { color: colors.onBrandSecondary }]}>
+                {exportingPdf ? 'Préparation...' : 'Télécharger PDF'}
+              </Text>
+            </Pressable>
+          )}
+          {error && <Text style={styles.error}>{error}</Text>}
           <Pressable style={styles.primaryBtn} onPress={reset} testID="another-request">
             <Feather name="plus" size={18} color={colors.onBrandPrimary} />
             <Text style={styles.primaryBtnText}>Nouveau projet</Text>
@@ -189,7 +254,7 @@ export default function Financement() {
                 <Pressable
                   key={h.request_id}
                   style={styles.historyItem}
-                  onPress={() => setPitch(h.pitch)}
+                  onPress={() => { setPitch(h.pitch); setSelectedRequest(h); }}
                   testID={`history-${h.request_id}`}
                 >
                   <Feather name="file-text" size={16} color={colors.brandPrimary} />
@@ -293,6 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   pitchText: { color: colors.onSurface, fontSize: font.base, lineHeight: 22 },
+  pdfBtn: { backgroundColor: colors.brandSecondary, marginBottom: spacing.md },
   historyTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: spacing.md },
   historyItem: {
     flexDirection: 'row',

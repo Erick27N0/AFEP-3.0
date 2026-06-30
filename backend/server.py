@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,6 +6,7 @@ import os
 import logging
 import uuid
 import httpx
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -28,6 +29,110 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def _pdf_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+def _wrap_pdf_text(text: str, width: int = 88) -> list[str]:
+    lines = []
+    for raw in text.splitlines():
+        clean = re.sub(r"[*_`#]", "", raw).strip()
+        if not clean:
+            lines.append("")
+            continue
+        words = clean.split()
+        current = ""
+        for word in words:
+            next_line = f"{current} {word}".strip()
+            if len(next_line) > width and current:
+                lines.append(current)
+                current = word
+            else:
+                current = next_line
+        if current:
+            lines.append(current)
+    return lines
+
+def build_pitch_pdf(record: dict) -> bytes:
+    title = record.get("project_name") or "Pitch de financement"
+    lines = [
+        "Eclosion - Pitch de financement",
+        f"Projet : {title}",
+        f"Secteur : {record.get('sector', 'Non precise')}",
+        f"Montant recherche : {record.get('target_amount', 'Non precise')}",
+        "",
+        *(_wrap_pdf_text(record.get("pitch", ""), width=92)),
+    ]
+
+    pages: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        current.append(line)
+        if len(current) >= 42:
+            pages.append(current)
+            current = []
+    if current:
+        pages.append(current)
+
+    objects: list[bytes] = []
+    pages_count = len(pages)
+    catalog_id = 1
+    pages_id = 2
+    font_id = 3
+    first_page_id = 4
+    first_content_id = first_page_id + pages_count
+
+    objects.append(f"{catalog_id} 0 obj << /Type /Catalog /Pages {pages_id} 0 R >> endobj\n".encode("ascii"))
+    kids = " ".join(f"{first_page_id + i} 0 R" for i in range(pages_count))
+    objects.append(f"{pages_id} 0 obj << /Type /Pages /Kids [{kids}] /Count {pages_count} >> endobj\n".encode("ascii"))
+    objects.append(f"{font_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n".encode("ascii"))
+
+    page_objects: list[bytes] = []
+    content_objects: list[bytes] = []
+    for index, page_lines in enumerate(pages):
+        page_id = first_page_id + index
+        content_id = first_content_id + index
+        page_objects.append(
+            (
+                f"{page_id} 0 obj << /Type /Page /Parent {pages_id} 0 R "
+                f"/MediaBox [0 0 595 842] /Resources << /Font << /F1 {font_id} 0 R >> >> "
+                f"/Contents {content_id} 0 R >> endobj\n"
+            ).encode("ascii")
+        )
+        stream_lines = ["BT", "/F1 11 Tf", "48 790 Td", "14 TL"]
+        for line_number, line in enumerate(page_lines):
+            if line_number == 0:
+                stream_lines.append(f"({_pdf_escape(line)}) Tj")
+            else:
+                stream_lines.append(f"T* ({_pdf_escape(line)}) Tj")
+        stream_lines.append("ET")
+        stream = "\n".join(stream_lines).encode("latin-1", "replace")
+        content_objects.append(
+            (
+                f"{content_id} 0 obj << /Length {len(stream)} >> stream\n"
+            ).encode("ascii") + stream + b"\nendstream endobj\n"
+        )
+
+    objects.extend(page_objects)
+    objects.extend(content_objects)
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(pdf))
+        pdf.extend(obj)
+    xref_at = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        (
+            f"trailer << /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+            f"startxref\n{xref_at}\n%%EOF\n"
+        ).encode("ascii")
+    )
+    return bytes(pdf)
 
 # ---------------- Models ----------------
 class User(BaseModel):
@@ -723,6 +828,21 @@ async def list_my_funding(request: Request):
         {"user_id": user['user_id']}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     return items
+
+@api_router.get("/funding/{request_id}/pdf")
+async def export_funding_pdf(request_id: str, request: Request):
+    user = await get_current_user(request)
+    record = await db.funding_requests.find_one(
+        {"request_id": request_id, "user_id": user["user_id"]}, {"_id": 0}
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Demande introuvable")
+    filename = f"{request_id}.pdf"
+    return Response(
+        content=build_pitch_pdf(record),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 # ---------------- Admin Dashboard ----------------
 @api_router.get("/admin/summary")

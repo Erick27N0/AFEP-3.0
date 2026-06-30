@@ -105,3 +105,7 @@ def test_funding_generate_requires_auth(api):
 def test_funding_mine_requires_auth(api):
     r = api.get(f"{BASE_URL}/api/funding/mine")
     assert r.status_code == 401
+
+def test_funding_pdf_requires_auth(api):
+    r = api.get(f"{BASE_URL}/api/funding/fund_x/pdf")
+    assert r.status_code == 401
