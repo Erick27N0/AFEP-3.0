@@ -17,6 +17,7 @@ import { apiFetch } from '@/src/api';
 import { useAuth } from '@/src/auth-context';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
+import { getFavorites, toggleFavorite, type FavoritesMap } from '@/src/offline';
 
 type Opportunity = {
   opp_id: string;
@@ -30,6 +31,7 @@ type Opportunity = {
 
 export default function Accueil() {
   const [items, setItems] = useState<Opportunity[]>([]);
+  const [favorites, setFavorites] = useState<FavoritesMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
@@ -39,8 +41,12 @@ export default function Accueil() {
 
   const load = useCallback(async () => {
     try {
-      const data = await apiFetch('/opportunities');
+      const [data, savedFavorites] = await Promise.all([
+        apiFetch('/opportunities'),
+        getFavorites(),
+      ]);
       setItems(data);
+      setFavorites(savedFavorites);
     } catch {
       toast.show("Impossible de charger les opportunités. Vérifiez votre connexion.");
     } finally {
@@ -53,6 +59,19 @@ export default function Accueil() {
     load();
   }, [load]);
 
+  const handleFavoriteOpportunity = async (item: Opportunity) => {
+    const active = await toggleFavorite({
+      kind: 'opportunity',
+      id: item.opp_id,
+      title: item.title,
+      subtitle: item.location,
+      description: item.description,
+      href: '/',
+    });
+    setFavorites(await getFavorites());
+    toast.show(active ? 'Opportunité ajoutée aux favoris.' : 'Opportunité retirée des favoris.', 'success');
+  };
+
   const featured = items.find((i) => i.featured) || items[0];
   const rest = items.filter((i) => i.opp_id !== featured?.opp_id);
 
@@ -63,6 +82,13 @@ export default function Accueil() {
           <Text style={styles.hello}>Bonjour</Text>
           <Text style={styles.name} numberOfLines={1}>{user?.name?.split(' ')[0] || 'Bienvenue'}</Text>
         </View>
+        <Pressable
+          testID="open-favorites"
+          onPress={() => router.push('/favorites' as never)}
+          style={styles.adminButton}
+        >
+          <Feather name="heart" size={19} color={colors.brandSecondary} />
+        </Pressable>
         <Pressable
           testID="open-admin"
           onPress={() => router.push('/admin' as never)}
@@ -94,8 +120,21 @@ export default function Accueil() {
                 locations={[0.4, 1]}
               />
               <View style={styles.heroContent}>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{featured.sector}</Text>
+                <View style={styles.heroTopRow}>
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{featured.sector}</Text>
+                  </View>
+                  <Pressable
+                    testID={`favorite-${featured.opp_id}`}
+                    onPress={() => handleFavoriteOpportunity(featured)}
+                    style={styles.heroFavoriteBtn}
+                  >
+                    <Feather
+                      name="star"
+                      size={17}
+                      color={favorites?.opportunity[featured.opp_id] ? colors.brandSecondary : '#fff'}
+                    />
+                  </Pressable>
                 </View>
                 <Text style={styles.heroTitle} numberOfLines={2}>{featured.title}</Text>
                 <View style={styles.heroMeta}>
@@ -110,7 +149,20 @@ export default function Accueil() {
           {rest.map((it) => (
             <Pressable key={it.opp_id} testID={`opp-${it.opp_id}`} style={styles.card}>
               <View style={{ flex: 1, paddingRight: spacing.md }}>
-                <Text style={styles.cardSector}>{it.sector}</Text>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardSector}>{it.sector}</Text>
+                  <Pressable
+                    testID={`favorite-${it.opp_id}`}
+                    onPress={() => handleFavoriteOpportunity(it)}
+                    style={styles.favoriteBtn}
+                  >
+                    <Feather
+                      name="star"
+                      size={16}
+                      color={favorites?.opportunity[it.opp_id] ? colors.brandSecondary : colors.onSurfaceTertiary}
+                    />
+                  </Pressable>
+                </View>
                 <Text style={styles.cardTitle} numberOfLines={2}>{it.title}</Text>
                 <Text style={styles.cardDesc} numberOfLines={2}>{it.description}</Text>
                 <View style={styles.cardMeta}>
@@ -178,6 +230,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
   },
   heroContent: { marginTop: 'auto', padding: spacing.lg, gap: spacing.sm },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   tag: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -185,6 +238,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   tagText: { color: '#fff', fontSize: font.sm, fontWeight: '500' },
+  heroFavoriteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   heroTitle: { color: '#fff', fontSize: font.xl, fontWeight: '500', lineHeight: 26 },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   heroLoc: { color: '#fff', opacity: 0.9, fontSize: font.sm },
@@ -198,6 +259,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardSector: { color: colors.brandPrimary, fontSize: font.sm, fontWeight: '500', marginBottom: 4 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  favoriteBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: 4 },
   cardDesc: { color: colors.onSurfaceSecondary, fontSize: font.base, lineHeight: 18 },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },

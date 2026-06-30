@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const KEY_PREFIX = 'offline_module_';
 const INDEX_KEY = 'offline_modules_index';
 const PROGRESS_KEY = 'training_progress';
+const FAVORITES_KEY = 'user_favorites';
 
 export type OfflineModule = {
   module_id: string;
@@ -21,6 +22,19 @@ export type TrainingProgress = {
 };
 
 export type TrainingProgressMap = Record<string, TrainingProgress>;
+export type FavoriteKind = 'module' | 'donor' | 'opportunity';
+
+export type FavoriteItem = {
+  id: string;
+  kind: FavoriteKind;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  href?: string;
+  saved_at: number;
+};
+
+export type FavoritesMap = Record<FavoriteKind, Record<string, FavoriteItem>>;
 
 export async function saveModule(mod: Omit<OfflineModule, 'saved_at'>) {
   const payload: OfflineModule = { ...mod, saved_at: Date.now() };
@@ -73,4 +87,39 @@ export async function setModuleCompleted(module_id: string, completed: boolean) 
   };
   await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
   return progress[module_id];
+}
+
+function emptyFavorites(): FavoritesMap {
+  return { module: {}, donor: {}, opportunity: {} };
+}
+
+export async function getFavorites(): Promise<FavoritesMap> {
+  const raw = await AsyncStorage.getItem(FAVORITES_KEY);
+  return raw ? { ...emptyFavorites(), ...JSON.parse(raw) } : emptyFavorites();
+}
+
+export async function getFavoriteList(kind?: FavoriteKind): Promise<FavoriteItem[]> {
+  const favorites = await getFavorites();
+  const items = kind
+    ? Object.values(favorites[kind])
+    : Object.values(favorites).flatMap((bucket) => Object.values(bucket));
+  return items.sort((a, b) => b.saved_at - a.saved_at);
+}
+
+export async function isFavorite(kind: FavoriteKind, id: string): Promise<boolean> {
+  const favorites = await getFavorites();
+  return Boolean(favorites[kind][id]);
+}
+
+export async function toggleFavorite(item: Omit<FavoriteItem, 'saved_at'>): Promise<boolean> {
+  const favorites = await getFavorites();
+  const bucket = favorites[item.kind];
+  if (bucket[item.id]) {
+    delete bucket[item.id];
+    await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    return false;
+  }
+  bucket[item.id] = { ...item, saved_at: Date.now() };
+  await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  return true;
 }

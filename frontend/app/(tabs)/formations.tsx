@@ -14,7 +14,16 @@ import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
-import { getIndex, saveModule, getModule, getProgress, type TrainingProgressMap } from '@/src/offline';
+import {
+  getFavorites,
+  getIndex,
+  getModule,
+  getProgress,
+  saveModule,
+  toggleFavorite,
+  type FavoritesMap,
+  type TrainingProgressMap,
+} from '@/src/offline';
 
 type Module = {
   module_id: string;
@@ -37,6 +46,7 @@ export default function Formations() {
   const [items, setItems] = useState<Module[]>([]);
   const [downloadedIds, setDownloadedIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<TrainingProgressMap>({});
+  const [favorites, setFavorites] = useState<FavoritesMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const router = useRouter();
@@ -44,9 +54,14 @@ export default function Formations() {
   const toast = useToast();
 
   const loadDownloaded = useCallback(async () => {
-    const [idx, savedProgress] = await Promise.all([getIndex(), getProgress()]);
+    const [idx, savedProgress, savedFavorites] = await Promise.all([
+      getIndex(),
+      getProgress(),
+      getFavorites(),
+    ]);
     setDownloadedIds(idx);
     setProgress(savedProgress);
+    setFavorites(savedFavorites);
   }, []);
 
   const load = useCallback(async () => {
@@ -106,6 +121,20 @@ export default function Formations() {
   const completedCount = items.filter((m) => progress[m.module_id]?.completed).length;
   const progressPercent = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
 
+  const handleFavoriteModule = async (m: Module) => {
+    const active = await toggleFavorite({
+      kind: 'module',
+      id: m.module_id,
+      title: m.title,
+      subtitle: m.duration,
+      description: m.summary,
+      href: `/module/${m.module_id}`,
+    });
+    setFavorites(await getFavorites());
+    Haptics.selectionAsync().catch(() => {});
+    toast.show(active ? 'Formation ajoutée aux favoris.' : 'Formation retirée des favoris.', 'success');
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="formations-screen">
       <View style={styles.header}>
@@ -163,6 +192,7 @@ export default function Formations() {
             {items.map((m) => {
               const isDownloaded = downloadedIds.includes(m.module_id);
               const isCompleted = progress[m.module_id]?.completed;
+              const isFavorite = Boolean(favorites?.module[m.module_id]);
               return (
                 <Pressable
                   key={m.module_id}
@@ -178,21 +208,34 @@ export default function Formations() {
                         color={colors.onBrandTertiary}
                       />
                     </View>
-                    {isCompleted ? (
-                      <View
-                        style={[styles.statusDot, styles.completedDot]}
-                        testID={`completed-${m.module_id}`}
+                    <View style={styles.cardActions}>
+                      <Pressable
+                        testID={`favorite-${m.module_id}`}
+                        onPress={() => handleFavoriteModule(m)}
+                        style={styles.favoriteBtn}
                       >
-                        <Feather name="check-circle" size={13} color="#fff" />
+                        <Feather
+                          name="star"
+                          size={15}
+                          color={isFavorite ? colors.brandSecondary : colors.onSurfaceTertiary}
+                        />
+                      </Pressable>
+                      {isCompleted ? (
+                        <View
+                          style={[styles.statusDot, styles.completedDot]}
+                          testID={`completed-${m.module_id}`}
+                        >
+                          <Feather name="check-circle" size={13} color="#fff" />
+                        </View>
+                      ) : isDownloaded && (
+                        <View
+                          style={[styles.statusDot, styles.downloadedDot]}
+                          testID={`downloaded-${m.module_id}`}
+                        >
+                          <Feather name="check" size={11} color="#fff" />
+                        </View>
+                      )}
                       </View>
-                    ) : isDownloaded && (
-                      <View
-                        style={[styles.statusDot, styles.downloadedDot]}
-                        testID={`downloaded-${m.module_id}`}
-                      >
-                        <Feather name="check" size={11} color="#fff" />
-                      </View>
-                    )}
                   </View>
                   <Text style={styles.cardTitle} numberOfLines={2}>{m.title}</Text>
                   <Text style={styles.cardSummary} numberOfLines={3}>{m.summary}</Text>
@@ -273,6 +316,15 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: colors.brandTertiary,
     alignItems: 'center', justifyContent: 'center',
+  },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  favoriteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusDot: {
     width: 22, height: 22, borderRadius: 11,

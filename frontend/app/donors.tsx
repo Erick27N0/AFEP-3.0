@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { apiFetch } from '@/src/api';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
+import { getFavorites, toggleFavorite, type FavoritesMap } from '@/src/offline';
 
 type Donor = {
   donor_id: string;
@@ -44,10 +45,12 @@ export default function Donors() {
   const [countries, setCountries] = useState<string[]>(['Tous']);
   const [country, setCountry] = useState('Tous');
   const [donors, setDonors] = useState<Donor[]>([]);
+  const [favorites, setFavorites] = useState<FavoritesMap | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     apiFetch('/donors/countries').then(setCountries).catch(() => {});
+    getFavorites().then(setFavorites).catch(() => {});
   }, []);
 
   const load = useCallback(async (c: string) => {
@@ -56,7 +59,7 @@ export default function Donors() {
       const q = c === 'Tous' ? '' : `?country=${encodeURIComponent(c)}`;
       const d = await apiFetch(`/donors${q}`);
       setDonors(d);
-    } catch (e) {
+    } catch {
       toast.show("Impossible de charger la liste des bailleurs.");
     } finally {
       setLoading(false);
@@ -64,6 +67,19 @@ export default function Donors() {
   }, [toast]);
 
   useEffect(() => { load(country); }, [country, load]);
+
+  const handleFavoriteDonor = async (d: Donor) => {
+    const active = await toggleFavorite({
+      kind: 'donor',
+      id: d.donor_id,
+      title: d.name,
+      subtitle: `${d.city}, ${d.country}`,
+      description: d.description,
+      href: '/donors',
+    });
+    setFavorites(await getFavorites());
+    toast.show(active ? 'Bailleur ajouté aux favoris.' : 'Bailleur retiré des favoris.', 'success');
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="donors-screen">
@@ -132,7 +148,20 @@ export default function Donors() {
                 </View>
               </View>
 
-              <Text style={styles.donorName}>{d.name}</Text>
+              <View style={styles.donorTitleRow}>
+                <Text style={styles.donorName}>{d.name}</Text>
+                <Pressable
+                  testID={`favorite-${d.donor_id}`}
+                  onPress={() => handleFavoriteDonor(d)}
+                  style={styles.favoriteBtn}
+                >
+                  <Feather
+                    name="star"
+                    size={17}
+                    color={favorites?.donor[d.donor_id] ? colors.brandSecondary : colors.onSurfaceTertiary}
+                  />
+                </Pressable>
+              </View>
               {d.rating_count > 0 && (
                 <View style={styles.ratingRow} testID={`rating-${d.donor_id}`}>
                   {[1, 2, 3, 4, 5].map((s) => (
@@ -244,7 +273,16 @@ const styles = StyleSheet.create({
   typeText: { fontSize: font.sm, fontWeight: '500' },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   locText: { color: colors.onSurfaceTertiary, fontSize: font.sm },
-  donorName: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', marginBottom: 4 },
+  donorTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: 4 },
+  donorName: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500', flex: 1 },
+  favoriteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',

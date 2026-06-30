@@ -14,7 +14,15 @@ import * as Haptics from 'expo-haptics';
 import { apiFetch } from '@/src/api';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
-import { saveModule, getModule, removeModule, getModuleProgress, setModuleCompleted } from '@/src/offline';
+import {
+  getFavorites,
+  getModule,
+  getModuleProgress,
+  removeModule,
+  saveModule,
+  setModuleCompleted,
+  toggleFavorite,
+} from '@/src/offline';
 
 type Section = { title: string; content: string };
 type ModuleDetailData = {
@@ -36,16 +44,19 @@ export default function ModuleDetail() {
   const [busy, setBusy] = useState(false);
   const [fromCache, setFromCache] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [favorite, setFavorite] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     // Try cache first
-    const [cached, savedProgress] = await Promise.all([
+    const [cached, savedProgress, favorites] = await Promise.all([
       getModule(id),
       getModuleProgress(id),
+      getFavorites(),
     ]);
     setCompleted(savedProgress.completed);
+    setFavorite(Boolean(favorites.module[id]));
     if (cached) {
       setData(cached);
       setOffline(true);
@@ -99,6 +110,21 @@ export default function ModuleDetail() {
     toast.show(nextCompleted ? 'Module marqué comme terminé.' : 'Module remis à faire.', 'success');
   };
 
+  const handleFavorite = async () => {
+    if (!data) return;
+    const active = await toggleFavorite({
+      kind: 'module',
+      id: data.module_id,
+      title: data.title,
+      subtitle: data.duration,
+      description: data.summary,
+      href: `/module/${data.module_id}`,
+    });
+    setFavorite(active);
+    Haptics.selectionAsync().catch(() => {});
+    toast.show(active ? 'Formation ajoutée aux favoris.' : 'Formation retirée des favoris.', 'success');
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="module-detail">
       <View style={styles.topbar}>
@@ -106,6 +132,20 @@ export default function ModuleDetail() {
           <Feather name="arrow-left" size={20} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.topbarTitle}>Formation</Text>
+        <View style={styles.topActions}>
+        {data && (
+          <Pressable
+            testID="favorite-toggle"
+            onPress={handleFavorite}
+            style={styles.iconBtn}
+          >
+            <Feather
+              name="star"
+              size={20}
+              color={favorite ? colors.brandSecondary : colors.onSurfaceTertiary}
+            />
+          </Pressable>
+        )}
         {data ? (
           <Pressable
             testID="download-toggle"
@@ -124,6 +164,7 @@ export default function ModuleDetail() {
             )}
           </Pressable>
         ) : <View style={styles.iconBtn} />}
+        </View>
       </View>
       {loading && !data ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} /></View>
@@ -216,6 +257,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
   },
   iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  topActions: { flexDirection: 'row', alignItems: 'center' },
   topbarTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500' },
   offlineBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
