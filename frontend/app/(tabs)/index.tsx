@@ -83,6 +83,13 @@ export default function Accueil() {
           <Text style={styles.name} numberOfLines={1}>{user?.name?.split(' ')[0] || 'Bienvenue'}</Text>
         </View>
         <Pressable
+          testID="open-search"
+          onPress={() => router.push('/search' as never)}
+          style={styles.adminButton}
+        >
+          <Feather name="search" size={19} color={colors.onSurfaceSecondary} />
+        </Pressable>
+        <Pressable
           testID="open-favorites"
           onPress={() => router.push('/favorites' as never)}
           style={styles.adminButton}
