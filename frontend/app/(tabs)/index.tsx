@@ -90,6 +90,13 @@ export default function Accueil() {
           <Feather name="heart" size={19} color={colors.brandSecondary} />
         </Pressable>
         <Pressable
+          testID="open-reminders"
+          onPress={() => router.push('/reminders' as never)}
+          style={styles.adminButton}
+        >
+          <Feather name="bell" size={19} color={colors.info} />
+        </Pressable>
+        <Pressable
           testID="open-admin"
           onPress={() => router.push('/admin' as never)}
           style={styles.adminButton}

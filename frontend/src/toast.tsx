@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, font, radius, spacing } from './theme';
+import { getDueReminders, markRemindersNotified } from './reminders';
 
 type ToastKind = 'error' | 'success' | 'info';
 type Toast = { id: number; message: string; kind: ToastKind };
@@ -29,6 +30,36 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     },
     [opacity, hide]
   );
+
+  const showBrowserNotification = useCallback((title: string, body: string) => {
+    if (Platform.OS !== 'web') return;
+    const WebNotification = (globalThis as unknown as { Notification?: typeof Notification }).Notification;
+    if (!WebNotification) return;
+    if (WebNotification.permission === 'granted') {
+      new WebNotification(title, { body });
+      return;
+    }
+    if (WebNotification.permission === 'default') {
+      WebNotification.requestPermission().then((permission) => {
+        if (permission === 'granted') new WebNotification(title, { body });
+      }).catch(() => {});
+    }
+  }, []);
+
+  const checkReminders = useCallback(async () => {
+    const due = await getDueReminders();
+    if (due.length === 0) return;
+    const first = due[0];
+    show(`Rappel : ${first.title}. ${first.message}`, 'info');
+    showBrowserNotification(first.title, first.message);
+    await markRemindersNotified(due.map((reminder) => reminder.reminder_id));
+  }, [show, showBrowserNotification]);
+
+  useEffect(() => {
+    checkReminders();
+    const interval = setInterval(checkReminders, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [checkReminders]);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
