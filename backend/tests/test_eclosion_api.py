@@ -80,6 +80,14 @@ def test_my_group_requires_auth(api):
     r = api.get(f"{BASE_URL}/api/groups/mine")
     assert r.status_code == 401
 
+def test_group_messages_requires_auth(api):
+    r = api.get(f"{BASE_URL}/api/groups/mine/messages")
+    assert r.status_code == 401
+
+def test_create_group_message_requires_auth(api):
+    r = api.post(f"{BASE_URL}/api/groups/mine/messages", json={"content": "Bonjour"})
+    assert r.status_code == 401
+
 def test_list_groups_public(api):
     # Listing groups is not protected in code; ensure 200
     r = api.get(f"{BASE_URL}/api/groups")

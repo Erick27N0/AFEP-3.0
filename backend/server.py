@@ -46,6 +46,9 @@ class GroupCreate(BaseModel):
     description: str
     location: str
 
+class GroupMessageCreate(BaseModel):
+    content: str
+
 class Group(BaseModel):
     group_id: str
     name: str
@@ -218,6 +221,45 @@ async def my_group(request: Request):
         {"_id": 0, "user_id": 1, "name": 1, "picture": 1, "email": 1}
     ).to_list(100)
     return {"group": grp, "members_info": members_info}
+
+@api_router.get("/groups/mine/messages")
+async def list_my_group_messages(request: Request):
+    user = await get_current_user(request)
+    group_id = user.get('group_id')
+    if not group_id:
+        raise HTTPException(status_code=400, detail="Vous devez rejoindre un groupe")
+    grp = await db.groups.find_one({"group_id": group_id}, {"_id": 0, "members": 1})
+    if not grp or user["user_id"] not in grp.get("members", []):
+        raise HTTPException(status_code=403, detail="Accès au groupe refusé")
+    return await db.group_messages.find(
+        {"group_id": group_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+@api_router.post("/groups/mine/messages")
+async def create_my_group_message(payload: GroupMessageCreate, request: Request):
+    user = await get_current_user(request)
+    group_id = user.get('group_id')
+    content = payload.content.strip()
+    if not group_id:
+        raise HTTPException(status_code=400, detail="Vous devez rejoindre un groupe")
+    if not content:
+        raise HTTPException(status_code=400, detail="Message vide")
+    if len(content) > 500:
+        raise HTTPException(status_code=400, detail="Message trop long")
+    grp = await db.groups.find_one({"group_id": group_id}, {"_id": 0, "members": 1})
+    if not grp or user["user_id"] not in grp.get("members", []):
+        raise HTTPException(status_code=403, detail="Accès au groupe refusé")
+    doc = {
+        "message_id": f"msg_{uuid.uuid4().hex[:12]}",
+        "group_id": group_id,
+        "user_id": user["user_id"],
+        "user_name": user.get("name", ""),
+        "content": content,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.group_messages.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
 
 # ---------------- Opportunities (seeded) ----------------
 SEED_OPPORTUNITIES = [
@@ -775,6 +817,7 @@ async def startup():
     await db.user_sessions.create_index("user_id")
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     await db.groups.create_index("group_id", unique=True)
+    await db.group_messages.create_index([("group_id", 1), ("created_at", -1)])
     await db.donor_ratings.create_index([("donor_id", 1), ("user_id", 1)], unique=True)
     logger.info("Indexes ready")
     if DEMO_MODE:

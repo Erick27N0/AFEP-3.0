@@ -27,6 +27,14 @@ type Group = {
 };
 
 type Member = { user_id: string; name: string; picture?: string; email: string };
+type GroupMessage = {
+  message_id: string;
+  group_id: string;
+  user_id: string;
+  user_name: string;
+  content: string;
+  created_at: string;
+};
 
 export default function MonGroupe() {
   const { user, refresh, logout } = useAuth();
@@ -39,17 +47,33 @@ export default function MonGroupe() {
   const [mode, setMode] = useState<'idle' | 'create' | 'join'>('idle');
   const [form, setForm] = useState({ name: '', description: '', location: '' });
   const [busy, setBusy] = useState(false);
+  const [messages, setMessages] = useState<GroupMessage[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  const loadMessages = useCallback(async () => {
+    try {
+      const items = await apiFetch('/groups/mine/messages');
+      setMessages(items);
+    } catch {
+      setMessages([]);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const mine = await apiFetch('/groups/mine');
       setGroup(mine.group);
       setMembers(mine.members_info || []);
-      if (!mine.group) {
+      if (mine.group) {
+        const items = await apiFetch('/groups/mine/messages');
+        setMessages(items);
+      } else {
+        setMessages([]);
         const all = await apiFetch('/groups');
         setAllGroups(all);
       }
-    } catch (e) {
+    } catch {
       toast.show("Impossible de charger votre groupe.");
     } finally {
       setLoading(false);
@@ -68,7 +92,7 @@ export default function MonGroupe() {
       setMode('idle');
       setForm({ name: '', description: '', location: '' });
       toast.show('Groupe créé avec succès', 'success');
-    } catch (e) {
+    } catch {
       toast.show("La création du groupe a échoué. Réessayez.");
     } finally {
       setBusy(false);
@@ -83,10 +107,28 @@ export default function MonGroupe() {
       await load();
       setMode('idle');
       toast.show('Vous avez rejoint le groupe', 'success');
-    } catch (e) {
+    } catch {
       toast.show("Impossible de rejoindre ce groupe. Réessayez.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const content = messageText.trim();
+    if (!content) return;
+    setSendingMessage(true);
+    try {
+      await apiFetch('/groups/mine/messages', {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      });
+      setMessageText('');
+      await loadMessages();
+    } catch {
+      toast.show("Impossible d'envoyer le message.");
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -131,6 +173,65 @@ export default function MonGroupe() {
                 </View>
               ))}
             </ScrollView>
+          </View>
+
+          <View style={styles.block} testID="group-chat">
+            <Text style={styles.blockTitle}>Messages</Text>
+            <View style={styles.messageComposer}>
+              <TextInput
+                testID="group-message-input"
+                style={styles.messageInput}
+                value={messageText}
+                onChangeText={setMessageText}
+                placeholder="Écrire au groupe..."
+                placeholderTextColor={colors.onSurfaceTertiary}
+                multiline
+                maxLength={500}
+              />
+              <Pressable
+                testID="send-group-message"
+                onPress={handleSendMessage}
+                disabled={sendingMessage || !messageText.trim()}
+                style={[
+                  styles.sendButton,
+                  (!messageText.trim() || sendingMessage) && { opacity: 0.5 },
+                ]}
+              >
+                {sendingMessage ? (
+                  <ActivityIndicator size="small" color={colors.onBrandPrimary} />
+                ) : (
+                  <Feather name="send" size={18} color={colors.onBrandPrimary} />
+                )}
+              </Pressable>
+            </View>
+            {messages.length === 0 ? (
+              <Text style={styles.messagesEmpty}>Aucun message pour le moment.</Text>
+            ) : (
+              <View style={styles.messagesList}>
+                {messages.map((message) => {
+                  const isMine = message.user_id === user?.user_id;
+                  return (
+                    <View
+                      key={message.message_id}
+                      style={[styles.messageBubble, isMine && styles.messageBubbleMine]}
+                    >
+                      <View style={styles.messageMeta}>
+                        <Text style={styles.messageAuthor} numberOfLines={1}>
+                          {isMine ? 'Vous' : message.user_name || 'Membre'}
+                        </Text>
+                        <Text style={styles.messageDate}>
+                          {new Date(message.created_at).toLocaleDateString('fr-FR', {
+                            day: '2-digit',
+                            month: 'short',
+                          })}
+                        </Text>
+                      </View>
+                      <Text style={styles.messageContent}>{message.content}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <View style={styles.block}>
@@ -307,6 +408,54 @@ const styles = StyleSheet.create({
   memberName: { color: colors.onSurface, fontSize: font.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.xs },
   rowText: { color: colors.onSurfaceSecondary, fontSize: font.base },
+  messageComposer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  messageInput: {
+    flex: 1,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    color: colors.onSurface,
+    fontSize: font.base,
+    minHeight: 48,
+    maxHeight: 110,
+  },
+  sendButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messagesEmpty: {
+    color: colors.onSurfaceTertiary,
+    fontSize: font.base,
+    paddingVertical: spacing.lg,
+  },
+  messagesList: { gap: spacing.md, marginTop: spacing.md },
+  messageBubble: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  messageBubbleMine: {
+    backgroundColor: colors.brandTertiary,
+  },
+  messageMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  messageAuthor: { color: colors.onSurface, fontSize: font.sm, fontWeight: '500', flex: 1 },
+  messageDate: { color: colors.onSurfaceTertiary, fontSize: font.sm },
+  messageContent: { color: colors.onSurfaceSecondary, fontSize: font.base, lineHeight: 20 },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
