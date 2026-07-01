@@ -90,6 +90,13 @@ export default function Accueil() {
           <Feather name="search" size={19} color={colors.onSurfaceSecondary} />
         </Pressable>
         <Pressable
+          testID="open-dashboard"
+          onPress={() => router.push('/dashboard' as never)}
+          style={styles.adminButton}
+        >
+          <Feather name="activity" size={19} color={colors.info} />
+        </Pressable>
+        <Pressable
           testID="open-favorites"
           onPress={() => router.push('/favorites' as never)}
           style={styles.adminButton}
