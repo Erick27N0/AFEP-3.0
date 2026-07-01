@@ -53,6 +53,15 @@ type GroupMessage = {
   created_at: string;
 };
 
+type OnboardingStep = {
+  id: string;
+  title: string;
+  description: string;
+  status: 'termine' | 'en_cours';
+  href: string;
+  icon: keyof typeof Feather.glyphMap;
+};
+
 function formatDateTime(value?: string) {
   if (!value) return 'N/A';
   return new Intl.DateTimeFormat('fr-FR', {
@@ -147,6 +156,58 @@ export default function PersonalDashboard() {
   const latestFunding = funding[0];
   const nextReminder = reminders.filter((item) => !item.done_at).sort((a, b) => a.due_at - b.due_at)[0];
   const latestMessage = messages[0];
+  const onboarding: OnboardingStep[] = [
+    {
+      id: 'group',
+      title: 'Créer ou rejoindre un groupe',
+      description: group ? `${group.name} · ${group.members.length} membre(s)` : 'Commencez par rejoindre la vie du groupe.',
+      status: group ? 'termine' : 'en_cours',
+      href: '/groupe',
+      icon: 'users',
+    },
+    {
+      id: 'training',
+      title: 'Terminer une formation',
+      description: completedCount > 0 ? `${completedCount} module(s) terminé(s)` : 'Ouvrez une formation et marquez-la comme terminée.',
+      status: completedCount > 0 ? 'termine' : 'en_cours',
+      href: '/formations',
+      icon: 'book-open',
+    },
+    {
+      id: 'favorite',
+      title: 'Ajouter un favori',
+      description: favorites.length > 0 ? favorites[0].title : 'Gardez une opportunité, un bailleur ou une formation sous la main.',
+      status: favorites.length > 0 ? 'termine' : 'en_cours',
+      href: '/favorites',
+      icon: 'star',
+    },
+    {
+      id: 'reminder',
+      title: 'Programmer un rappel',
+      description: activeReminders > 0 ? `${activeReminders} rappel(s) actif(s)` : 'Programmez une action à suivre.',
+      status: activeReminders > 0 ? 'termine' : 'en_cours',
+      href: '/reminders',
+      icon: 'bell',
+    },
+    {
+      id: 'pitch',
+      title: 'Générer un pitch',
+      description: latestFunding ? latestFunding.project_name : 'Rédigez un mini plan d’affaires.',
+      status: latestFunding ? 'termine' : 'en_cours',
+      href: '/financement',
+      icon: 'file-text',
+    },
+    {
+      id: 'search',
+      title: 'Explorer la recherche',
+      description: 'Retrouvez rapidement une formation, un bailleur ou une opportunité.',
+      status: 'en_cours',
+      href: '/search',
+      icon: 'search',
+    },
+  ];
+  const onboardingDone = onboarding.filter((item) => item.status === 'termine').length;
+  const onboardingPercent = Math.round((onboardingDone / onboarding.length) * 100);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="dashboard-screen">
@@ -179,6 +240,45 @@ export default function PersonalDashboard() {
             </Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Checklist de démarrage</Text>
+            <View style={styles.checklistSummary}>
+              <Text style={styles.checklistScore}>{onboardingDone}/{onboarding.length}</Text>
+              <Text style={styles.checklistScoreLabel}>étapes terminées</Text>
+              <View style={styles.checklistProgressTrack}>
+                <View style={[styles.checklistProgressFill, { width: `${onboardingPercent}%` }]} />
+              </View>
+            </View>
+            <View style={styles.checklistList}>
+              {onboarding.map((step) => (
+                <Pressable
+                  key={step.id}
+                  testID={`onboarding-${step.id}`}
+                  onPress={() => router.push(step.href as never)}
+                  style={styles.checklistItem}
+                >
+                  <View style={[styles.checklistIcon, step.status === 'termine' && styles.checklistIconDone]}>
+                    <Feather
+                      name={step.icon}
+                      size={16}
+                      color={step.status === 'termine' ? colors.onBrandPrimary : colors.brandPrimary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.checklistRow}>
+                      <Text style={styles.checklistTitle}>{step.title}</Text>
+                      <Text style={[styles.checklistBadge, step.status === 'termine' ? styles.checklistBadgeDone : styles.checklistBadgeLive]}>
+                        {step.status === 'termine' ? 'Terminé' : 'En cours'}
+                      </Text>
+                    </View>
+                    <Text style={styles.checklistDesc} numberOfLines={2}>{step.description}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={colors.onSurfaceTertiary} />
+                </Pressable>
+              ))}
             </View>
           </View>
 
@@ -357,6 +457,53 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   progressFill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.brandSecondary },
+  checklistSummary: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  checklistScore: { color: colors.onSurface, fontSize: font.xxl, fontWeight: '500' },
+  checklistScoreLabel: { color: colors.onSurfaceTertiary, fontSize: font.sm, marginTop: 2 },
+  checklistProgressTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceTertiary,
+    marginTop: spacing.md,
+    overflow: 'hidden',
+  },
+  checklistProgressFill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.brandPrimary },
+  checklistList: { gap: spacing.sm },
+  checklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  checklistIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checklistIconDone: { backgroundColor: colors.brandPrimary },
+  checklistRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  checklistTitle: { color: colors.onSurface, fontSize: font.base, fontWeight: '500', flex: 1 },
+  checklistBadge: {
+    fontSize: font.sm,
+    fontWeight: '500',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  checklistBadgeDone: { color: colors.success, backgroundColor: '#E8F5EB' },
+  checklistBadgeLive: { color: colors.info, backgroundColor: '#EAF0F4' },
+  checklistDesc: { color: colors.onSurfaceTertiary, fontSize: font.sm, lineHeight: 18, marginTop: 3 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: spacing.md },
   statCard: {
     width: '48%',

@@ -17,7 +17,9 @@ import { apiFetch } from '@/src/api';
 import { useAuth } from '@/src/auth-context';
 import { useToast } from '@/src/toast';
 import { colors, spacing, radius, font } from '@/src/theme';
-import { getFavorites, toggleFavorite, type FavoritesMap } from '@/src/offline';
+import { getFavorites, getModuleProgress, toggleFavorite, type FavoritesMap } from '@/src/offline';
+import { getFavoriteList } from '@/src/offline';
+import { getReminders } from '@/src/reminders';
 
 type Opportunity = {
   opp_id: string;
@@ -29,9 +31,17 @@ type Opportunity = {
   featured?: boolean;
 };
 
+type OnboardingStep = {
+  id: string;
+  title: string;
+  status: 'Terminé' | 'En cours';
+  href: string;
+};
+
 export default function Accueil() {
   const [items, setItems] = useState<Opportunity[]>([]);
   const [favorites, setFavorites] = useState<FavoritesMap | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
@@ -41,12 +51,45 @@ export default function Accueil() {
 
   const load = useCallback(async () => {
     try {
-      const [data, savedFavorites] = await Promise.all([
+      const [data, savedFavorites, savedFavoritesList, reminders, savedModules] = await Promise.all([
         apiFetch('/opportunities'),
         getFavorites(),
+        getFavoriteList(),
+        getReminders(),
+        apiFetch('/training/modules'),
       ]);
       setItems(data);
       setFavorites(savedFavorites);
+      const modules = savedModules as { module_id: string }[];
+      const completed = await Promise.all(modules.map((mod) => getModuleProgress(mod.module_id)));
+      const completedCount = completed.filter((item) => item.completed).length;
+      const onboardingSteps: OnboardingStep[] = [
+        {
+          id: 'group',
+          title: 'Groupe',
+          status: 'En cours',
+          href: '/groupe',
+        },
+        {
+          id: 'training',
+          title: 'Formation',
+          status: completedCount > 0 ? 'Terminé' : 'En cours',
+          href: '/formations',
+        },
+        {
+          id: 'favorite',
+          title: 'Favori',
+          status: savedFavoritesList.length > 0 ? 'Terminé' : 'En cours',
+          href: '/favorites',
+        },
+        {
+          id: 'reminder',
+          title: 'Rappel',
+          status: reminders.some((item) => !item.done_at) ? 'Terminé' : 'En cours',
+          href: '/reminders',
+        },
+      ];
+      setOnboarding(onboardingSteps);
     } catch {
       toast.show("Impossible de charger les opportunités. Vérifiez votre connexion.");
     } finally {
@@ -132,6 +175,27 @@ export default function Accueil() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
         >
           <Text style={styles.section}>À la une</Text>
+          <Pressable style={styles.progressCard} onPress={() => router.push('/dashboard' as never)} testID="home-progress-card">
+            <View style={{ flex: 1 }}>
+              <Text style={styles.progressLabel}>Tableau de bord personnel</Text>
+              <Text style={styles.progressTitle}>
+                {onboarding.filter((step: OnboardingStep) => step.status === 'Terminé').length}/{onboarding.length} étapes terminées
+              </Text>
+              <View style={styles.progressMiniTrack}>
+                <View
+                  style={[
+                    styles.progressMiniFill,
+                    {
+                      width: `${onboarding.length
+                        ? (onboarding.filter((step: OnboardingStep) => step.status === 'Terminé').length / onboarding.length) * 100
+                        : 0}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.onSurfaceTertiary} />
+          </Pressable>
           {featured && (
             <Pressable testID={`featured-${featured.opp_id}`} style={styles.heroCard}>
               <Image source={featured.image_url} style={StyleSheet.absoluteFill} contentFit="cover" />
@@ -243,6 +307,27 @@ const styles = StyleSheet.create({
     fontSize: font.lg,
     fontWeight: '500',
   },
+  progressCard: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  progressLabel: { color: colors.onSurfaceTertiary, fontSize: font.sm, marginBottom: 2 },
+  progressTitle: { color: colors.onSurface, fontSize: font.lg, fontWeight: '500' },
+  progressMiniTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceTertiary,
+    marginTop: spacing.sm,
+    overflow: 'hidden',
+  },
+  progressMiniFill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.brandPrimary },
   heroCard: {
     marginHorizontal: spacing.xl,
     height: 220,
